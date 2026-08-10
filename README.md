@@ -5,8 +5,8 @@ AI-помощник, интеграция с Яндекс Алисой и умн
 
 ## Статус
 
-Проект в активной разработке. Текущий этап: Milestone 1 (repository, Docker, backend skeleton,
-PostgreSQL, health checks, CI, authentication).
+Проект в активной разработке. Milestone 1 (repository, Docker, backend skeleton, PostgreSQL,
+health checks, CI, authentication) завершён. Далее — Milestone 2 (tenant/users/tasks CRUD).
 
 ## Архитектура
 
@@ -20,4 +20,27 @@ Modular monolith. Подробности — в `ARCHITECTURE.md` (появит�
 
 ## Разработка
 
-Документация по локальному запуску появится вместе с backend-скелетом (см. `backend/README.md`).
+### Backend
+
+Требуется [uv](https://docs.astral.sh/uv/) и Docker.
+
+```bash
+cp .env.example .env      # заполнить POSTGRES_PASSWORD и JWT_SECRET реальными значениями
+docker compose up -d --build
+docker compose exec backend python -m alembic upgrade head
+```
+
+API будет доступен на `http://localhost:8000`, эндпоинты — под `/api/v1/`
+(`/api/v1/health/live`, `/api/v1/health/ready`, `/api/v1/auth/*`).
+
+Локальная разработка без Docker (Postgres всё равно поднимается контейнером):
+
+```bash
+cd backend
+uv sync --dev
+uv run alembic upgrade head   # с DATABASE_URL, указывающим на локальный Postgres
+uv run pytest
+uv run ruff check .
+uv run mypy src
+uv run uvicorn home_manager.app:app --reload
+```
