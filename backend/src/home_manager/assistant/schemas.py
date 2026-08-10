@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from home_manager.calendar.models import CalendarEventType
+from home_manager.calendar.schemas import CalendarEventCreate
 
 
 class CreateTaskIntent(BaseModel):
@@ -45,4 +46,8 @@ class AssistantMessageRequest(BaseModel):
 class AssistantReply(BaseModel):
     reply: str
     task_id: uuid.UUID | None = None
-    event_count: int | None = None
+    # Parsed but not yet saved — the frontend shows these for the user to
+    # review/trim, then submits them itself via the normal calendar bulk
+    # endpoint. Nothing from a create_schedule intent is persisted directly
+    # by the assistant; a small free LLM is not reliable enough for that.
+    proposed_events: list[CalendarEventCreate] | None = None

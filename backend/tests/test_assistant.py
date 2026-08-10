@@ -64,7 +64,7 @@ async def test_unrecognized_message_does_not_create_a_task(
 
 
 @pytest.mark.asyncio
-async def test_schedule_message_creates_calendar_events(
+async def test_schedule_message_proposes_but_does_not_save_events(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:
     owner = await register_household(client)
@@ -83,18 +83,20 @@ async def test_schedule_message_creates_calendar_events(
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["event_count"] == 2
     assert body["task_id"] is None
+    proposed = body["proposed_events"]
+    assert len(proposed) == 2
+    assert {event["event_type"] for event in proposed} == {"working_hours"}
+    assert proposed[0]["start_at"].startswith("2026-08-1")
 
+    # A create_schedule intent only proposes events for review — nothing is
+    # written to the calendar until the caller confirms via the bulk endpoint.
     events_response = await client.get(
         "/api/v1/calendar/events",
         params={"ends_after": "2026-08-01T00:00:00Z"},
         headers=_auth_headers(owner),
     )
-    events = events_response.json()
-    assert len(events) == 2
-    assert {event["event_type"] for event in events} == {"working_hours"}
-    assert events[0]["start_at"].startswith("2026-08-1")
+    assert events_response.json() == []
 
 
 @pytest.mark.asyncio
@@ -114,16 +116,10 @@ async def test_schedule_message_rolls_overnight_shift_to_next_day(
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["event_count"] == 1
-
-    events_response = await client.get(
-        "/api/v1/calendar/events",
-        params={"ends_after": "2026-08-01T00:00:00Z"},
-        headers=_auth_headers(owner),
-    )
-    event = events_response.json()[0]
-    assert event["start_at"][:10] == "2026-08-11"
-    assert event["end_at"][:10] == "2026-08-12"
+    proposed = body["proposed_events"]
+    assert len(proposed) == 1
+    assert proposed[0]["start_at"][:10] == "2026-08-11"
+    assert proposed[0]["end_at"][:10] == "2026-08-12"
 
 
 @pytest.mark.asyncio
@@ -143,15 +139,8 @@ async def test_schedule_message_with_impossible_date_degrades_gracefully(
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["event_count"] is None
     assert body["task_id"] is None
-
-    events_response = await client.get(
-        "/api/v1/calendar/events",
-        params={"ends_after": "2026-01-01T00:00:00Z"},
-        headers=_auth_headers(owner),
-    )
-    assert events_response.json() == []
+    assert body["proposed_events"] is None
 
 
 @pytest.mark.asyncio

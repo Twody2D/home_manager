@@ -187,6 +187,8 @@ export const en = {
     placeholder: "Message the assistant…",
     send: "Send",
     error: "Something went wrong reaching the assistant. Please try again.",
+    confirmSchedule: "Add to calendar ({{count}})",
+    scheduleSaved: "Added to your calendar.",
   },
   devices: {
     title: "Devices",

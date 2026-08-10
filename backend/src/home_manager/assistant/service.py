@@ -13,8 +13,7 @@ from home_manager.assistant.schemas import (
     CreateTaskIntent,
     UnknownIntent,
 )
-from home_manager.calendar import service as calendar_service
-from home_manager.calendar.schemas import CalendarEventBulkCreate, CalendarEventCreate
+from home_manager.calendar.schemas import CalendarEventCreate
 from home_manager.tasks import service as tasks_service
 from home_manager.tasks.schemas import TaskCreate
 
@@ -41,13 +40,31 @@ def _parse_client_now(client_now: str | None) -> tuple[datetime, str]:
     return parsed, offset
 
 
+def _build_date_lookup_table(now: datetime) -> str:
+    """A 14-day date/weekday lookup table for the prompt.
+
+    Small free models are unreliable at *computing* relative dates
+    ("this week", "next Monday") from a single "today is ..." sentence —
+    in testing, one miscounted "this week Mon-Fri" as next week's dates.
+    Handing over every date already resolved turns that into a lookup,
+    which is a much easier task than arithmetic for these models.
+    """
+    lines = []
+    for i in range(14):
+        d = (now + timedelta(days=i)).date()
+        tag = " (today)" if i == 0 else " (tomorrow)" if i == 1 else ""
+        lines.append(f"{d.isoformat()} = {d.strftime('%A')}{tag}")
+    return "\n".join(lines)
+
+
 def _build_system_prompt(now: datetime) -> str:
     return (
         "You are a household assistant. Read the user's message and reply with a single "
         "JSON object describing their intent, and nothing else.\n"
-        f"For context: right now it is {now.date().isoformat()} "
-        f"({now.strftime('%A')}), in the user's own local timezone — resolve any relative "
-        'dates ("tomorrow", "next Monday", "this weekend") against that.\n'
+        "Here is a lookup table of dates and their weekday, in the user's own local "
+        "timezone — use it directly to resolve any relative date "
+        '("tomorrow", "next Monday", "this weekend"), never compute dates yourself:\n'
+        f"{_build_date_lookup_table(now)}\n"
         'To create a single task: {"intent": "create_task", "title": "...", '
         '"duration_minutes": <int or null>}\n'
         "To record one or more calendar entries — a work shift, sleep schedule, a repeating "
@@ -147,7 +164,6 @@ async def execute_intent(
                         end_at=f"{end_date}T{item.end_time}:00{offset}",
                     )
                 )
-            bulk_payload = CalendarEventBulkCreate(events=items)
         except (ValidationError, ValueError):
             # The regex on ScheduleEventItem only checks digit shape, not
             # calendar validity (e.g. "2026-02-30") — a model the LLM
@@ -158,13 +174,12 @@ async def execute_intent(
                 task_id=None,
             )
 
-        events = await calendar_service.create_events_bulk(
-            session, tenant_id=tenant_id, user_id=user_id, payload=bulk_payload
-        )
-        await session.commit()
+        # Deliberately not persisted here — see AssistantReply.proposed_events.
+        # The caller reviews/trims this list and saves it via the normal
+        # calendar bulk-create endpoint.
         return AssistantReply(
-            reply=f"Added {len(events)} calendar event(s) to your schedule.",
-            event_count=len(events),
+            reply=f"Here's what I understood — {len(items)} event(s). Check them and confirm.",
+            proposed_events=items,
         )
 
     return AssistantReply(

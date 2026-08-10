@@ -163,7 +163,7 @@ export interface DailyPlanResponse {
 export interface AssistantReply {
   reply: string;
   task_id: string | null;
-  event_count: number | null;
+  proposed_events: CalendarEventCreateInput[] | null;
 }
 
 export type SmartHomeCommand = "turn_on" | "turn_off" | "toggle";

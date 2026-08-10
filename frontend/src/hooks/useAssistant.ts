@@ -10,9 +10,6 @@ export function useSendAssistantMessage() {
         void queryClient.invalidateQueries({ queryKey: ["tasks"] });
         void queryClient.invalidateQueries({ queryKey: ["daily-plan"] });
       }
-      if (reply.event_count) {
-        void queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
-      }
     },
   });
 }

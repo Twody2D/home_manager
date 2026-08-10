@@ -189,6 +189,8 @@ export const ru: typeof en = {
     placeholder: "Написать ассистенту…",
     send: "Отправить",
     error: "Не удалось связаться с ассистентом. Попробуйте ещё раз.",
+    confirmSchedule: "Добавить в календарь ({{count}})",
+    scheduleSaved: "Добавлено в календарь.",
   },
   devices: {
     title: "Устройства",
