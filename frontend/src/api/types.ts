@@ -133,3 +133,25 @@ export interface UserPreferences {
 export type UserPreferencesUpdateInput = Partial<
   Omit<UserPreferences, "id" | "tenant_id" | "user_id">
 >;
+
+export interface ScheduledTaskEntry {
+  task_id: string;
+  title: string;
+  priority: TaskPriority;
+  start_at: string;
+  end_at: string;
+  score: number;
+}
+
+export interface UnscheduledTaskEntry {
+  task_id: string;
+  title: string;
+  priority: TaskPriority;
+  reason: string;
+}
+
+export interface DailyPlanResponse {
+  date: string;
+  scheduled: ScheduledTaskEntry[];
+  unscheduled: UnscheduledTaskEntry[];
+}

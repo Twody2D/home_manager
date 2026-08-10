@@ -1,7 +1,12 @@
 import { TaskCard } from "../components/TaskCard";
 import { useMembers } from "../hooks/useMembers";
 import { useDeleteTask, useTasks, useUpdateTask } from "../hooks/useTasks";
+import { useDailyPlan } from "../hooks/usePlanning";
 import type { Task } from "../api/types";
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
 
 function isSameDay(a: Date, b: Date): boolean {
   return (
@@ -38,6 +43,7 @@ function partitionByDueDate(tasks: Task[]) {
 export function DashboardPage() {
   const tasksQuery = useTasks({ status: "pending", limit: 100 });
   const membersQuery = useMembers();
+  const planQuery = useDailyPlan();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
 
@@ -72,6 +78,36 @@ export function DashboardPage() {
           day: "numeric",
         })}
       </h1>
+
+      {planQuery.data && (
+        <Section title="Suggested schedule">
+          {planQuery.data.scheduled.length === 0 && planQuery.data.unscheduled.length === 0 && (
+            <p className="text-sm text-slate-500">
+              Nothing to schedule — assign yourself a task with a duration to see a plan here.
+            </p>
+          )}
+          {planQuery.data.scheduled.map((entry) => (
+            <li
+              key={entry.task_id}
+              className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2"
+            >
+              <span className="text-sm text-slate-900">{entry.title}</span>
+              <span className="text-xs text-slate-500">
+                {formatTime(entry.start_at)} – {formatTime(entry.end_at)}
+              </span>
+            </li>
+          ))}
+          {planQuery.data.unscheduled.map((entry) => (
+            <li
+              key={entry.task_id}
+              className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-3 py-2"
+            >
+              <span className="text-sm text-slate-900">{entry.title}</span>
+              <span className="text-xs text-amber-700">{entry.reason}</span>
+            </li>
+          ))}
+        </Section>
+      )}
 
       {overdue.length === 0 && today.length === 0 && other.length === 0 && (
         <p className="text-sm text-slate-500">Nothing pending — enjoy your day.</p>

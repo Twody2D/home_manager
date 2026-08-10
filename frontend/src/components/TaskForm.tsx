@@ -15,6 +15,7 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [assignedTo, setAssignedTo] = useState("");
   const [dueAt, setDueAt] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState("");
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -25,12 +26,14 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
       priority,
       assigned_to: assignedTo || null,
       due_at: dueAt ? new Date(dueAt).toISOString() : null,
+      duration_minutes: durationMinutes ? Number(durationMinutes) : null,
     });
 
     setTitle("");
     setPriority("medium");
     setAssignedTo("");
     setDueAt("");
+    setDurationMinutes("");
   }
 
   return (
@@ -74,6 +77,15 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
           value={dueAt}
           onChange={(e) => setDueAt(e.target.value)}
           className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+        />
+
+        <input
+          type="number"
+          min={1}
+          placeholder="Duration (min)"
+          value={durationMinutes}
+          onChange={(e) => setDurationMinutes(e.target.value)}
+          className="w-32 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
         />
 
         <button
