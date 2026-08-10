@@ -122,9 +122,7 @@ async def test_refresh_rotates_token_and_old_one_stops_working(client: AsyncClie
     old_refresh_cookie = client.cookies["refresh_token"]
     old_csrf_cookie = client.cookies["csrf_token"]
 
-    response = await client.post(
-        "/api/v1/auth/refresh", headers={"X-CSRF-Token": old_csrf_cookie}
-    )
+    response = await client.post("/api/v1/auth/refresh", headers={"X-CSRF-Token": old_csrf_cookie})
 
     assert response.status_code == 200
     assert client.cookies["refresh_token"] != old_refresh_cookie
