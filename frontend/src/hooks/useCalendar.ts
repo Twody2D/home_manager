@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as calendarApi from "../api/calendar";
-import type { CalendarEventCreateInput, CalendarEventUpdateInput } from "../api/types";
+import type {
+  CalendarEventBulkCreateInput,
+  CalendarEventCreateInput,
+  CalendarEventUpdateInput,
+} from "../api/types";
 
 const EVENTS_KEY = ["calendar-events"] as const;
 
@@ -15,6 +19,16 @@ export function useCreateEvent() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CalendarEventCreateInput) => calendarApi.createEvent(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: EVENTS_KEY });
+    },
+  });
+}
+
+export function useCreateEventsBulk() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CalendarEventBulkCreateInput) => calendarApi.createEventsBulk(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: EVENTS_KEY });
     },

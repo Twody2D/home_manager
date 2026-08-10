@@ -24,6 +24,13 @@ class CalendarEventCreate(BaseModel):
         return self
 
 
+class CalendarEventBulkCreate(BaseModel):
+    # Bounded so a single request can't be used to hammer the DB with an
+    # unbounded insert — covers the real use case (a few weeks of shifts)
+    # with headroom to spare.
+    events: list[CalendarEventCreate] = Field(min_length=1, max_length=60)
+
+
 class CalendarEventUpdate(BaseModel):
     event_type: CalendarEventType | None = None
     title: str | None = Field(default=None, min_length=1, max_length=200)

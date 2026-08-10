@@ -2,7 +2,13 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarEventForm } from "../components/CalendarEventForm";
 import { CalendarEventCard } from "../components/CalendarEventCard";
-import { useCalendarEvents, useCreateEvent, useDeleteEvent } from "../hooks/useCalendar";
+import { BulkScheduleForm } from "../components/BulkScheduleForm";
+import {
+  useCalendarEvents,
+  useCreateEvent,
+  useCreateEventsBulk,
+  useDeleteEvent,
+} from "../hooks/useCalendar";
 import { useMembers } from "../hooks/useMembers";
 import { useAuth } from "../auth/useAuth";
 import type { CalendarEvent } from "../api/types";
@@ -34,6 +40,7 @@ export function CalendarPage() {
   const eventsQuery = useCalendarEvents({ ends_after: now });
   const membersQuery = useMembers();
   const createEvent = useCreateEvent();
+  const createEventsBulk = useCreateEventsBulk();
   const deleteEvent = useDeleteEvent();
 
   const members = membersQuery.data ?? [];
@@ -58,6 +65,13 @@ export function CalendarPage() {
         isSubmitting={createEvent.isPending}
         onSubmit={async (input) => {
           await createEvent.mutateAsync(input);
+        }}
+      />
+
+      <BulkScheduleForm
+        isSubmitting={createEventsBulk.isPending}
+        onSubmit={async (events) => {
+          await createEventsBulk.mutateAsync({ events });
         }}
       />
 

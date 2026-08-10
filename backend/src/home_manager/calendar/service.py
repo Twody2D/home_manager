@@ -7,7 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from home_manager.calendar.models import CalendarEvent
-from home_manager.calendar.schemas import CalendarEventCreate, CalendarEventUpdate
+from home_manager.calendar.schemas import (
+    CalendarEventBulkCreate,
+    CalendarEventCreate,
+    CalendarEventUpdate,
+)
 from home_manager.core.errors import AppError
 
 
@@ -47,6 +51,33 @@ async def create_event(
     session.add(event)
     await session.flush()
     return event
+
+
+async def create_events_bulk(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
+    payload: CalendarEventBulkCreate,
+) -> list[CalendarEvent]:
+    events = [
+        CalendarEvent(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            event_type=item.event_type,
+            title=item.title,
+            description=item.description,
+            start_at=item.start_at,
+            end_at=item.end_at,
+            all_day=item.all_day,
+            location=item.location,
+            recurrence=item.recurrence,
+        )
+        for item in payload.events
+    ]
+    session.add_all(events)
+    await session.flush()
+    return events
 
 
 async def get_event(

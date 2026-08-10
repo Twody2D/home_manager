@@ -66,6 +66,98 @@ async def test_create_event_rejects_invalid_window(
 
 
 @pytest.mark.asyncio
+async def test_bulk_create_events(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/calendar/events/bulk",
+        json={
+            "events": [
+                {
+                    "event_type": "working_hours",
+                    "title": "Work",
+                    "start_at": "2026-01-05T09:00:00Z",
+                    "end_at": "2026-01-05T18:00:00Z",
+                },
+                {
+                    "event_type": "working_hours",
+                    "title": "Work",
+                    "start_at": "2026-01-06T09:00:00Z",
+                    "end_at": "2026-01-06T18:00:00Z",
+                },
+            ]
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert len(body) == 2
+    assert all(event["user_id"] == owner["user"]["id"] for event in body)
+
+    list_response = await client.get("/api/v1/calendar/events", headers=_auth_headers(owner))
+    assert len(list_response.json()) == 2
+
+
+@pytest.mark.asyncio
+async def test_bulk_create_rejects_invalid_window_in_any_item(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/calendar/events/bulk",
+        json={
+            "events": [
+                {
+                    "event_type": "working_hours",
+                    "title": "Work",
+                    "start_at": "2026-01-05T09:00:00Z",
+                    "end_at": "2026-01-05T18:00:00Z",
+                },
+                {
+                    "event_type": "working_hours",
+                    "title": "Backwards",
+                    "start_at": "2026-01-06T18:00:00Z",
+                    "end_at": "2026-01-06T09:00:00Z",
+                },
+            ]
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 422
+    list_response = await client.get("/api/v1/calendar/events", headers=_auth_headers(owner))
+    assert list_response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_bulk_create_rejects_more_than_max_items(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    events = [
+        {
+            "event_type": "working_hours",
+            "title": "Work",
+            "start_at": "2026-01-05T09:00:00Z",
+            "end_at": "2026-01-05T18:00:00Z",
+        }
+        for _ in range(61)
+    ]
+
+    response = await client.post(
+        "/api/v1/calendar/events/bulk",
+        json={"events": events},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_household_members_can_see_each_others_events(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

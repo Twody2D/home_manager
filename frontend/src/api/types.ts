@@ -113,6 +113,10 @@ export interface CalendarEventCreateInput {
 
 export type CalendarEventUpdateInput = Partial<CalendarEventCreateInput>;
 
+export interface CalendarEventBulkCreateInput {
+  events: CalendarEventCreateInput[];
+}
+
 export type EnergyPattern = "morning" | "evening" | "steady";
 
 export interface UserPreferences {

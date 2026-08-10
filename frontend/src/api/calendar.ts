@@ -1,5 +1,10 @@
 import { apiFetch } from "./client";
-import type { CalendarEvent, CalendarEventCreateInput, CalendarEventUpdateInput } from "./types";
+import type {
+  CalendarEvent,
+  CalendarEventBulkCreateInput,
+  CalendarEventCreateInput,
+  CalendarEventUpdateInput,
+} from "./types";
 
 export interface ListEventsParams {
   user_id?: string;
@@ -18,6 +23,10 @@ export function listEvents(params: ListEventsParams = {}): Promise<CalendarEvent
 
 export function createEvent(input: CalendarEventCreateInput): Promise<CalendarEvent> {
   return apiFetch("/calendar/events", { method: "POST", body: input });
+}
+
+export function createEventsBulk(input: CalendarEventBulkCreateInput): Promise<CalendarEvent[]> {
+  return apiFetch("/calendar/events/bulk", { method: "POST", body: input });
 }
 
 export function updateEvent(id: string, input: CalendarEventUpdateInput): Promise<CalendarEvent> {

@@ -9,6 +9,7 @@ from home_manager.auth.dependencies import get_current_user
 from home_manager.auth.models import User
 from home_manager.calendar import service
 from home_manager.calendar.schemas import (
+    CalendarEventBulkCreate,
     CalendarEventCreate,
     CalendarEventResponse,
     CalendarEventUpdate,
@@ -30,6 +31,19 @@ async def create_event(
     )
     await session.commit()
     return CalendarEventResponse.model_validate(event)
+
+
+@router.post(
+    "/bulk", response_model=list[CalendarEventResponse], status_code=status.HTTP_201_CREATED
+)
+async def create_events_bulk(
+    payload: CalendarEventBulkCreate, current_user: CurrentUser, session: DbSession
+) -> list[CalendarEventResponse]:
+    events = await service.create_events_bulk(
+        session, tenant_id=current_user.tenant_id, user_id=current_user.id, payload=payload
+    )
+    await session.commit()
+    return [CalendarEventResponse.model_validate(event) for event in events]
 
 
 @router.get("", response_model=list[CalendarEventResponse])
