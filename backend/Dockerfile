@@ -22,6 +22,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.13-slim AS runtime
 
+# The base image's own system pip/setuptools (from ensurepip) aren't used
+# at runtime at all - the app runs entirely out of the uv-managed .venv
+# copied in below - but they still sit in site-packages and get flagged by
+# the image vulnerability scan (pip's vendored msgpack, setuptools path
+# traversal) unless upgraded past their known-vulnerable versions.
+RUN python -m pip install --upgrade --no-cache-dir pip setuptools
+
 RUN groupadd --system app && useradd --system --gid app --home-dir /app app
 
 WORKDIR /app
