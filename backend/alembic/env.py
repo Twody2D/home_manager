@@ -1,16 +1,16 @@
 import asyncio
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from alembic import context
+from home_manager.auth import (
+    models as auth_models,  # noqa: F401  (registers tables on Base.metadata)
+)
 from home_manager.config import get_settings
 from home_manager.db.base import Base
-
-# import model modules here so their tables register on Base.metadata
-# for 'autogenerate' support, e.g.: from home_manager.tenancy import models  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
