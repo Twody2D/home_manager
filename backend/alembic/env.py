@@ -11,6 +11,9 @@ from home_manager.auth import (
 )
 from home_manager.config import get_settings
 from home_manager.db.base import Base
+from home_manager.tasks import (
+    models as task_models,  # noqa: F401  (registers tables on Base.metadata)
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
