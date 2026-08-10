@@ -51,5 +51,26 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
 
+  nginx:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 128M
+    ports:
+      - "127.0.0.1:8080:8080"
+
 volumes:
   postgres_data:

@@ -73,6 +73,56 @@ jobs:
       - run: uv run alembic upgrade head
       - run: uv run pytest -q
 
+  frontend-lint:
+    name: Frontend lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+
+  frontend-test:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    needs: frontend-lint
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run test
+
+  frontend-build:
+    name: Frontend build (typecheck + bundle)
+    runs-on: ubuntu-latest
+    needs: frontend-test
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
   dependency-review:
     name: Dependency review
     runs-on: ubuntu-latest
@@ -84,21 +134,28 @@ jobs:
   docker-build:
     name: Docker build & scan
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, frontend-build]
+    strategy:
+      matrix:
+        include:
+          - context: backend
+            image: home-manager-backend:ci
+          - context: frontend
+            image: home-manager-nginx:ci
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Build backend image
+      - name: Build image
         uses: docker/build-push-action@v6
         with:
-          context: backend
+          context: ${{ matrix.context }}
           push: false
           load: true
-          tags: home-manager-backend:ci
+          tags: ${{ matrix.image }}
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@0.24.0
         with:
-          image-ref: home-manager-backend:ci
+          image-ref: ${{ matrix.image }}
           severity: CRITICAL,HIGH
           exit-code: "1"
           ignore-unfixed: true

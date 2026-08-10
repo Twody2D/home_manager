@@ -5,8 +5,13 @@ AI-помощник, интеграция с Яндекс Алисой и умн
 
 ## Статус
 
-Проект в активной разработке. Milestone 1 (repository, Docker, backend skeleton, PostgreSQL,
-health checks, CI, authentication) завершён. Далее — Milestone 2 (tenant/users/tasks CRUD).
+Проект в активной разработке. Завершены:
+
+- Milestone 1 — repository, Docker, backend skeleton, PostgreSQL, health checks, CI, authentication
+- Milestone 2 — tenant/users/tasks CRUD
+- Milestone 3 — PWA (login, dashboard, tasks, daily view)
+
+Далее — Milestone 4 (calendar, availability, preferences).
 
 ## Архитектура
 
@@ -30,10 +35,12 @@ docker compose up -d --build
 docker compose exec backend python -m alembic upgrade head
 ```
 
-API будет доступен на `http://localhost:8000`, эндпоинты — под `/api/v1/`
-(`/api/v1/health/live`, `/api/v1/health/ready`, `/api/v1/auth/*`).
+Полный стек (Postgres + backend + nginx с собранным фронтендом) — на `http://localhost:8080`.
+Backend напрямую (в обход nginx, для отладки API) — на `http://localhost:8000`, эндпоинты под
+`/api/v1/` (`/api/v1/health/live`, `/api/v1/health/ready`, `/api/v1/auth/*`, `/api/v1/tasks`,
+`/api/v1/users`).
 
-Локальная разработка без Docker (Postgres всё равно поднимается контейнером):
+Локальная разработка backend без Docker (Postgres всё равно поднимается контейнером):
 
 ```bash
 cd backend
@@ -44,3 +51,16 @@ uv run ruff check .
 uv run mypy src
 uv run uvicorn home_manager.app:app --reload
 ```
+
+### Frontend
+
+Требуется [Node.js](https://nodejs.org/) 24+.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Dev-сервер (`http://localhost:5173`) проксирует `/api` на `http://localhost:8000` — backend нужно
+поднять отдельно. Подробности и остальные npm-скрипты — в `frontend/README.md`.
