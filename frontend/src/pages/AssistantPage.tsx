@@ -26,12 +26,23 @@ function formatEventRange(event: CalendarEventCreateInput, locale: string): stri
   return `${date}, ${startTime}–${endTime}`;
 }
 
+const DRAFT_STORAGE_KEY = "home_manager_assistant_draft";
+
 export function AssistantPage() {
   const { t, i18n } = useTranslation();
   const [history, setHistory] = useState<ChatEntry[]>([]);
-  const [message, setMessage] = useState("");
+  // Backed by localStorage (not just component state) so an unsent draft
+  // survives navigating to another tab and back — the page unmounts on
+  // route change, which would otherwise lose it.
+  const [message, setMessage] = useState(() => localStorage.getItem(DRAFT_STORAGE_KEY) ?? "");
   const sendMessage = useSendAssistantMessage();
   const createEventsBulk = useCreateEventsBulk();
+
+  function updateMessage(value: string) {
+    setMessage(value);
+    if (value) localStorage.setItem(DRAFT_STORAGE_KEY, value);
+    else localStorage.removeItem(DRAFT_STORAGE_KEY);
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -40,6 +51,7 @@ export function AssistantPage() {
 
     setHistory((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text }]);
     setMessage("");
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
 
     try {
       const reply = await sendMessage.mutateAsync(text);
@@ -153,7 +165,7 @@ export function AssistantPage() {
         <input
           type="text"
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => updateMessage(e.target.value)}
           placeholder={t("assistant.placeholder")}
           className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
         />

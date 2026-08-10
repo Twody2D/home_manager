@@ -82,6 +82,11 @@ export const ru: typeof en = {
     error: "Не удалось загрузить календарь.",
     empty: "Нет предстоящих событий у семьи.",
     newEventPlaceholder: "Новое событие…",
+    grid: {
+      prevMonth: "Предыдущий месяц",
+      nextMonth: "Следующий месяц",
+      dayEmpty: "На этот день ничего не запланировано.",
+    },
     bulk: {
       toggleOpen: "Добавить несколько смен",
       toggleClose: "Скрыть",

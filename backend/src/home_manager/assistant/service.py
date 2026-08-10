@@ -77,7 +77,9 @@ def _build_system_prompt(now: datetime) -> str:
         '"date_from": "YYYY-MM-DD", "date_to": "YYYY-MM-DD", "start_time": "HH:MM", '
         '"end_time": "HH:MM", "event_type": one of "working_hours"/"sleep"/"meeting"/'
         '"sport"/"trip"/"personal"/"unavailable", "title": "..." or null}} '
-        "(weekdays are ISO numbers: 1=Monday .. 7=Sunday)\n"
+        '(weekdays are ISO numbers: 1=Monday .. 7=Sunday). A range phrased as "Monday to '
+        'Friday" (or "с понедельника по пятницу") is INCLUSIVE of both ends — that means '
+        "weekdays: [1,2,3,4,5], Friday included, not [1,2,3,4].\n"
         "2) A handful of specific/irregular shifts on different dates — list each one "
         'explicitly: {"intent": "create_schedule", "events": [{"date": "YYYY-MM-DD", '
         '"start_time": "HH:MM", "end_time": "HH:MM", "event_type": one of '

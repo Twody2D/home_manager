@@ -80,6 +80,11 @@ export const en = {
     error: "Failed to load calendar.",
     empty: "No upcoming events for the household.",
     newEventPlaceholder: "New event…",
+    grid: {
+      prevMonth: "Previous month",
+      nextMonth: "Next month",
+      dayEmpty: "Nothing scheduled for this day.",
+    },
     bulk: {
       toggleOpen: "Add multiple shifts",
       toggleClose: "Hide",
