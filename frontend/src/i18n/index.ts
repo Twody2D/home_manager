@@ -28,8 +28,15 @@ void i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
 });
 
+// The `lang` attribute isn't just metadata — Chromium's native form controls
+// (e.g. <input type="datetime-local">) render their placeholder and date
+// format from it, independently of anything React renders. Without this,
+// switching the app's language does nothing to those inputs.
+document.documentElement.lang = i18n.language;
+
 i18n.on("languageChanged", (language) => {
   localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+  document.documentElement.lang = language;
 });
 
 export default i18n;
