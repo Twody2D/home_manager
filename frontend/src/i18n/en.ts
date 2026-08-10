@@ -41,6 +41,7 @@ export const en = {
     loading: "Loading today's plan…",
     error: "Failed to load today's plan.",
     title: "Today, {{date}}",
+    todaySchedule: "Today's schedule",
     suggestedSchedule: "Suggested schedule",
     noSchedule: "Nothing to schedule — assign yourself a task with a duration to see a plan here.",
     overdue: "Overdue",

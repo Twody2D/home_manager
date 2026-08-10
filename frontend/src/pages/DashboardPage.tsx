@@ -1,9 +1,20 @@
 import { useTranslation } from "react-i18next";
 import { TaskCard } from "../components/TaskCard";
+import { CalendarEventCard } from "../components/CalendarEventCard";
 import { useMembers } from "../hooks/useMembers";
 import { useDeleteTask, useTasks, useUpdateTask } from "../hooks/useTasks";
 import { useDailyPlan } from "../hooks/usePlanning";
+import { useCalendarEvents, useDeleteEvent } from "../hooks/useCalendar";
+import { useAuth } from "../auth/useAuth";
 import type { Task } from "../api/types";
+
+function todayRange(): { start: Date; end: Date } {
+  const now = new Date();
+  return {
+    start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0),
+    end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59),
+  };
+}
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -43,14 +54,24 @@ function partitionByDueDate(tasks: Task[]) {
 
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
   const tasksQuery = useTasks({ status: "pending", limit: 100 });
   const membersQuery = useMembers();
   const planQuery = useDailyPlan();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const { start: todayStart, end: todayEnd } = todayRange();
+  const todayEventsQuery = useCalendarEvents({
+    ends_after: todayStart.toISOString(),
+    starts_before: todayEnd.toISOString(),
+  });
+  const deleteEvent = useDeleteEvent();
 
   const members = membersQuery.data ?? [];
   const membersById = new Map(members.map((member) => [member.id, member]));
+  const todayEvents = [...(todayEventsQuery.data ?? [])].sort((a, b) =>
+    a.start_at.localeCompare(b.start_at),
+  );
 
   function handleComplete(task: Task) {
     updateTask.mutate({ id: task.id, input: { status: "completed" } });
@@ -80,6 +101,20 @@ export function DashboardPage() {
       <h1 className="text-lg font-semibold text-slate-900">
         {t("dashboard.title", { date: dateLabel })}
       </h1>
+
+      {todayEvents.length > 0 && (
+        <Section title={t("dashboard.todaySchedule")}>
+          {todayEvents.map((event) => (
+            <CalendarEventCard
+              key={event.id}
+              event={event}
+              owner={membersById.get(event.user_id)}
+              isOwn={event.user_id === user?.id}
+              onDelete={(e) => deleteEvent.mutate(e.id)}
+            />
+          ))}
+        </Section>
+      )}
 
       {planQuery.data && (
         <Section title={t("dashboard.suggestedSchedule")}>
