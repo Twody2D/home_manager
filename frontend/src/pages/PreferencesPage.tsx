@@ -8,6 +8,7 @@ import {
   useEnablePushNotifications,
   useSendTestNotification,
 } from "../hooks/useNotifications";
+import { useAliceLinkStatus, useIssueAliceToken, useRevokeAliceToken } from "../hooks/useAlice";
 import { ApiError } from "../api/client";
 import type { EnergyPattern } from "../api/types";
 
@@ -100,6 +101,70 @@ function fromCsv(value: string): string[] {
     .filter(Boolean);
 }
 
+function AliceSection() {
+  const statusQuery = useAliceLinkStatus();
+  const issueToken = useIssueAliceToken();
+  const revokeToken = useRevokeAliceToken();
+
+  const webhookUrl = issueToken.data
+    ? `${window.location.origin}${issueToken.data.webhook_url}`
+    : null;
+
+  return (
+    <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+      <h2 className="text-sm font-semibold text-slate-900">Yandex Alice</h2>
+      <p className="text-xs text-slate-500">
+        Link this account to a Yandex Dialogs skill so you can say things like "create task: water
+        the plants" to Alice.
+      </p>
+
+      {statusQuery.data?.linked && !webhookUrl && (
+        <p className="text-sm text-slate-600">
+          Linked
+          {statusQuery.data.last_used_at &&
+            ` — last used ${new Date(statusQuery.data.last_used_at).toLocaleString()}`}
+          .
+        </p>
+      )}
+
+      {webhookUrl && (
+        <div className="space-y-1 rounded-md bg-slate-50 p-3 text-xs">
+          <p className="font-medium text-slate-700">
+            Paste this as your Dialogs skill's webhook URL — it's shown only once:
+          </p>
+          <code className="block break-all rounded bg-white p-2 text-slate-800">{webhookUrl}</code>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => issueToken.mutate()}
+          disabled={issueToken.isPending}
+          className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+        >
+          {issueToken.isPending
+            ? "Generating…"
+            : statusQuery.data?.linked
+              ? "Regenerate webhook URL"
+              : "Generate webhook URL"}
+        </button>
+
+        {statusQuery.data?.linked && (
+          <button
+            type="button"
+            onClick={() => revokeToken.mutate()}
+            disabled={revokeToken.isPending}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {revokeToken.isPending ? "Revoking…" : "Unlink"}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function PreferencesPage() {
   const prefsQuery = useMyPreferences();
   const updatePrefs = useUpdateMyPreferences();
@@ -159,6 +224,7 @@ export function PreferencesPage() {
       </p>
 
       <NotificationsSection />
+      <AliceSection />
 
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
         <div className="grid grid-cols-2 gap-3">
