@@ -25,9 +25,12 @@ FROM python:3.13-slim AS runtime
 # The base image's own system pip/setuptools (from ensurepip) aren't used
 # at runtime at all - the app runs entirely out of the uv-managed .venv
 # copied in below - but they still sit in site-packages and get flagged by
-# the image vulnerability scan (pip's vendored msgpack, setuptools path
-# traversal) unless upgraded past their known-vulnerable versions.
-RUN python -m pip install --upgrade --no-cache-dir pip setuptools
+# the image vulnerability scanner (pip vendors its own copy of msgpack,
+# currently stuck on a version with a known advisory that even the latest
+# pip release hasn't updated; setuptools has its own separate CVE). Since
+# nothing here needs them, remove them outright rather than chase upstream
+# patches for code the app never runs.
+RUN rm -rf /usr/local/lib/python3.13/site-packages/*
 
 RUN groupadd --system app && useradd --system --gid app --home-dir /app app
 
