@@ -16,12 +16,14 @@ AI-помощник, интеграция с Яндекс Алисой и умн
 - Milestone 7 — web push notifications (task assignment alerts)
 - Milestone 8 — Yandex Alice integration (webhook adapter over the assistant pipeline)
 - Milestone 9 — smart home integration (Mock/Home Assistant providers, Devices page)
-
-Далее — Milestone 10 (hardening / perf / backup / monitoring / docs).
+- Milestone 10 — hardening / perf / backup / monitoring / docs (structured JSON
+  logging, nginx-level rate limiting, DB backup/restore scripts, `ARCHITECTURE.md`,
+  `OPERATIONS.md`)
 
 ## Архитектура
 
-Modular monolith. Подробности — в `ARCHITECTURE.md` (появится по мере развития проекта).
+Modular monolith. Подробности — в [ARCHITECTURE.md](ARCHITECTURE.md), эксплуатация
+(логи, бэкапы, деплой) — в [OPERATIONS.md](OPERATIONS.md).
 
 ## Стек
 
