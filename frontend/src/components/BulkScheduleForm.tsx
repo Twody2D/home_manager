@@ -24,6 +24,8 @@ interface Row {
   eventType: CalendarEventType;
 }
 
+type PatternMode = "weekdays" | "rotation";
+
 function isoWeekday(date: Date): number {
   const day = date.getDay();
   return day === 0 ? 7 : day;
@@ -38,8 +40,23 @@ function toDateInputValue(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+// Both dates are constructed the same local-midnight way, so this is exact
+// (no DST half-day drift) and safe to feed straight into a modulo below.
+function daysBetween(from: Date, to: Date): number {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return Math.round((to.getTime() - from.getTime()) / msPerDay);
+}
+
 function toIsoDateTime(dateStr: string, timeStr: string): string {
   return new Date(`${dateStr}T${timeStr}:00`).toISOString();
+}
+
+function monthKey(dateStr: string): string {
+  return dateStr.slice(0, 7);
+}
+
+function daysInMonth(year: number, monthIndex0: number): number {
+  return new Date(year, monthIndex0 + 1, 0).getDate();
 }
 
 function makeRow(overrides: Partial<Row> = {}): Row {
@@ -59,10 +76,13 @@ interface BulkScheduleFormProps {
 }
 
 export function BulkScheduleForm({ onSubmit, isSubmitting }: BulkScheduleFormProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
+  const [patternMode, setPatternMode] = useState<PatternMode>("weekdays");
   const [selectedWeekdays, setSelectedWeekdays] = useState<Set<number>>(new Set([1, 2, 3, 4, 5]));
+  const [rotationWorkDays, setRotationWorkDays] = useState(2);
+  const [rotationOffDays, setRotationOffDays] = useState(2);
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
   const [startTime, setStartTime] = useState("09:00");
@@ -86,9 +106,14 @@ export function BulkScheduleForm({ onSubmit, isSubmitting }: BulkScheduleFormPro
     const to = new Date(`${rangeTo}T00:00:00`);
     if (to < from) return;
 
+    const cycleLength = rotationWorkDays + rotationOffDays;
     const generated: Row[] = [];
     for (const cursor = new Date(from); cursor <= to; cursor.setDate(cursor.getDate() + 1)) {
-      if (selectedWeekdays.has(isoWeekday(cursor))) {
+      const included =
+        patternMode === "weekdays"
+          ? selectedWeekdays.has(isoWeekday(cursor))
+          : cycleLength > 0 && daysBetween(from, cursor) % cycleLength < rotationWorkDays;
+      if (included) {
         generated.push(
           makeRow({
             date: toDateInputValue(cursor),
@@ -132,6 +157,68 @@ export function BulkScheduleForm({ onSubmit, isSubmitting }: BulkScheduleFormPro
     setRows([]);
   }
 
+  const monthsPresent = Array.from(new Set(rows.map((row) => monthKey(row.date)))).sort();
+
+  function renderMonthGrid(key: string) {
+    const [yearStr, monthStr] = key.split("-");
+    const year = Number(yearStr);
+    const monthIndex0 = Number(monthStr) - 1;
+    const firstDay = new Date(year, monthIndex0, 1);
+    // Grid starts on Monday, so offset by however far the 1st is past Monday.
+    const startOffset = isoWeekday(firstDay) - 1;
+    const total = daysInMonth(year, monthIndex0);
+    const cells: (string | null)[] = Array.from({ length: startOffset }, () => null);
+    for (let d = 1; d <= total; d++) {
+      cells.push(toDateInputValue(new Date(year, monthIndex0, d)));
+    }
+    const monthLabel = firstDay.toLocaleDateString(i18n.language, {
+      month: "long",
+      year: "numeric",
+    });
+
+    return (
+      <div key={key} className="space-y-1">
+        <p className="text-xs font-medium capitalize text-slate-600">{monthLabel}</p>
+        <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-slate-400">
+          {WEEKDAYS.map((day) => (
+            <span key={day}>{t(`weekday.${day}`)}</span>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {cells.map((dateStr, index) => {
+            if (!dateStr) return <span key={`gap-${index}`} />;
+            const dayNum = Number(dateStr.slice(8, 10));
+            const dayRows = rows.filter((row) => row.date === dateStr);
+            if (dayRows.length === 0) {
+              return (
+                <span
+                  key={dateStr}
+                  className="flex h-8 items-center justify-center rounded text-xs text-slate-300"
+                >
+                  {dayNum}
+                </span>
+              );
+            }
+            return (
+              <button
+                key={dateStr}
+                type="button"
+                title={t("calendar.bulk.previewRemoveHint")}
+                onClick={() => dayRows.forEach((row) => removeRow(row.id))}
+                className="flex h-8 flex-col items-center justify-center rounded bg-blue-600 text-xs font-medium text-white hover:bg-red-500"
+              >
+                <span>{dayNum}</span>
+                {dayRows.length > 1 && (
+                  <span className="text-[9px] leading-none opacity-80">×{dayRows.length}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   if (!expanded) {
     return (
       <button
@@ -161,26 +248,90 @@ export function BulkScheduleForm({ onSubmit, isSubmitting }: BulkScheduleFormPro
       <div className="space-y-2 rounded-md bg-slate-50 p-3">
         <div>
           <span className="mb-1 block text-xs font-medium text-slate-600">
-            {t("calendar.bulk.weekdays")}
+            {t("calendar.bulk.patternType")}
           </span>
           <div className="flex flex-wrap gap-1">
-            {WEEKDAYS.map((day) => (
-              <button
-                key={day}
-                type="button"
-                aria-pressed={selectedWeekdays.has(day)}
-                onClick={() => toggleWeekday(day)}
-                className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                  selectedWeekdays.has(day)
-                    ? "bg-blue-600 text-white"
-                    : "bg-white text-slate-600 ring-1 ring-inset ring-slate-300"
-                }`}
-              >
-                {t(`weekday.${day}`)}
-              </button>
-            ))}
+            <button
+              type="button"
+              aria-pressed={patternMode === "weekdays"}
+              onClick={() => setPatternMode("weekdays")}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                patternMode === "weekdays"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white text-slate-600 ring-1 ring-inset ring-slate-300"
+              }`}
+            >
+              {t("calendar.bulk.patternWeekdays")}
+            </button>
+            <button
+              type="button"
+              aria-pressed={patternMode === "rotation"}
+              onClick={() => setPatternMode("rotation")}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                patternMode === "rotation"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white text-slate-600 ring-1 ring-inset ring-slate-300"
+              }`}
+            >
+              {t("calendar.bulk.patternRotation")}
+            </button>
           </div>
         </div>
+
+        {patternMode === "weekdays" ? (
+          <div>
+            <span className="mb-1 block text-xs font-medium text-slate-600">
+              {t("calendar.bulk.weekdays")}
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {WEEKDAYS.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  aria-pressed={selectedWeekdays.has(day)}
+                  onClick={() => toggleWeekday(day)}
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    selectedWeekdays.has(day)
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-slate-600 ring-1 ring-inset ring-slate-300"
+                  }`}
+                >
+                  {t(`weekday.${day}`)}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <label className="text-xs">
+              <span className="mb-1 block text-slate-600">
+                {t("calendar.bulk.rotationWorkDays")}
+              </span>
+              <input
+                type="number"
+                min={1}
+                max={31}
+                value={rotationWorkDays}
+                onChange={(e) => setRotationWorkDays(Math.max(1, Number(e.target.value)))}
+                className="w-20 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="text-xs">
+              <span className="mb-1 block text-slate-600">
+                {t("calendar.bulk.rotationOffDays")}
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={31}
+                value={rotationOffDays}
+                onChange={(e) => setRotationOffDays(Math.max(0, Number(e.target.value)))}
+                className="w-20 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              />
+            </label>
+            <p className="w-full text-xs text-slate-400">{t("calendar.bulk.rotationHint")}</p>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2">
           <label className="text-xs">
@@ -249,18 +400,36 @@ export function BulkScheduleForm({ onSubmit, isSubmitting }: BulkScheduleFormPro
         <button
           type="button"
           onClick={handleGenerate}
-          disabled={!rangeFrom || !rangeTo || selectedWeekdays.size === 0}
+          disabled={
+            !rangeFrom ||
+            !rangeTo ||
+            (patternMode === "weekdays" ? selectedWeekdays.size === 0 : rotationWorkDays < 1)
+          }
           className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-white disabled:opacity-50"
         >
           {t("calendar.bulk.generate")}
         </button>
       </div>
 
+      {rows.length > 0 && (
+        <div className="space-y-3 rounded-md bg-slate-50 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-slate-600">{t("calendar.bulk.previewTitle")}</p>
+            <p className="text-right text-[11px] text-slate-400">
+              {t("calendar.bulk.previewHint")}
+            </p>
+          </div>
+          {monthsPresent.map((key) => renderMonthGrid(key))}
+        </div>
+      )}
+
       <div className="space-y-1.5">
         {rows.length === 0 ? (
           <p className="text-xs text-slate-400">{t("calendar.bulk.rowsEmpty")}</p>
         ) : (
-          rows.map((row) => (
+          <>
+            <p className="text-xs font-medium text-slate-600">{t("calendar.bulk.rowsTitle")}</p>
+            {rows.map((row) => (
             <div key={row.id} className="flex flex-wrap items-center gap-1.5 rounded-md border border-slate-200 p-1.5">
               <input
                 type="date"
@@ -301,7 +470,8 @@ export function BulkScheduleForm({ onSubmit, isSubmitting }: BulkScheduleFormPro
                 ×
               </button>
             </div>
-          ))
+            ))}
+          </>
         )}
       </div>
 
