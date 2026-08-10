@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { useMyPreferences, useUpdateMyPreferences } from "../hooks/usePreferences";
 import {
   isPushSupported,
@@ -13,6 +14,7 @@ import { ApiError } from "../api/client";
 import type { EnergyPattern } from "../api/types";
 
 function NotificationsSection() {
+  const { t } = useTranslation();
   const subscriptionQuery = useCurrentPushSubscription();
   const enable = useEnablePushNotifications();
   const disable = useDisablePushNotifications();
@@ -21,10 +23,8 @@ function NotificationsSection() {
   if (!isPushSupported()) {
     return (
       <section className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-slate-900">Notifications</h2>
-        <p className="text-sm text-slate-500">
-          This browser doesn't support push notifications.
-        </p>
+        <h2 className="text-sm font-semibold text-slate-900">{t("notifications.title")}</h2>
+        <p className="text-sm text-slate-500">{t("notifications.unsupported")}</p>
       </section>
     );
   }
@@ -39,10 +39,8 @@ function NotificationsSection() {
 
   return (
     <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Notifications</h2>
-      <p className="text-xs text-slate-500">
-        Get notified on this device when someone assigns you a task.
-      </p>
+      <h2 className="text-sm font-semibold text-slate-900">{t("notifications.title")}</h2>
+      <p className="text-xs text-slate-500">{t("notifications.description")}</p>
 
       <div className="flex flex-wrap items-center gap-2">
         {isSubscribed ? (
@@ -52,7 +50,7 @@ function NotificationsSection() {
             disabled={disable.isPending}
             className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           >
-            {disable.isPending ? "Disabling…" : "Disable notifications"}
+            {disable.isPending ? t("notifications.disabling") : t("notifications.disable")}
           </button>
         ) : (
           <button
@@ -61,7 +59,7 @@ function NotificationsSection() {
             disabled={enable.isPending}
             className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
           >
-            {enable.isPending ? "Enabling…" : "Enable notifications"}
+            {enable.isPending ? t("notifications.enabling") : t("notifications.enable")}
           </button>
         )}
 
@@ -72,19 +70,17 @@ function NotificationsSection() {
             disabled={sendTest.isPending}
             className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           >
-            {sendTest.isPending ? "Sending…" : "Send test notification"}
+            {sendTest.isPending ? t("notifications.sending") : t("notifications.sendTest")}
           </button>
         )}
       </div>
 
       {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
       {sendTest.isSuccess && sendTest.data.sent === 0 && (
-        <p className="text-sm text-amber-600">
-          No notification was delivered — the server may not have push configured yet.
-        </p>
+        <p className="text-sm text-amber-600">{t("notifications.testNotSent")}</p>
       )}
       {sendTest.isSuccess && sendTest.data.sent > 0 && (
-        <p className="text-sm text-emerald-600">Test notification sent.</p>
+        <p className="text-sm text-emerald-600">{t("notifications.testSent")}</p>
       )}
     </section>
   );
@@ -102,6 +98,7 @@ function fromCsv(value: string): string[] {
 }
 
 function AliceSection() {
+  const { t, i18n } = useTranslation();
   const statusQuery = useAliceLinkStatus();
   const issueToken = useIssueAliceToken();
   const revokeToken = useRevokeAliceToken();
@@ -112,26 +109,22 @@ function AliceSection() {
 
   return (
     <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Yandex Alice</h2>
-      <p className="text-xs text-slate-500">
-        Link this account to a Yandex Dialogs skill so you can say things like "create task: water
-        the plants" to Alice.
-      </p>
+      <h2 className="text-sm font-semibold text-slate-900">{t("alice.title")}</h2>
+      <p className="text-xs text-slate-500">{t("alice.description")}</p>
 
       {statusQuery.data?.linked && !webhookUrl && (
         <p className="text-sm text-slate-600">
-          Linked
-          {statusQuery.data.last_used_at &&
-            ` — last used ${new Date(statusQuery.data.last_used_at).toLocaleString()}`}
-          .
+          {statusQuery.data.last_used_at
+            ? t("alice.linkedLastUsed", {
+                date: new Date(statusQuery.data.last_used_at).toLocaleString(i18n.language),
+              })
+            : `${t("alice.linked")}.`}
         </p>
       )}
 
       {webhookUrl && (
         <div className="space-y-1 rounded-md bg-slate-50 p-3 text-xs">
-          <p className="font-medium text-slate-700">
-            Paste this as your Dialogs skill's webhook URL — it's shown only once:
-          </p>
+          <p className="font-medium text-slate-700">{t("alice.webhookInstructions")}</p>
           <code className="block break-all rounded bg-white p-2 text-slate-800">{webhookUrl}</code>
         </div>
       )}
@@ -144,10 +137,10 @@ function AliceSection() {
           className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
         >
           {issueToken.isPending
-            ? "Generating…"
+            ? t("alice.generating")
             : statusQuery.data?.linked
-              ? "Regenerate webhook URL"
-              : "Generate webhook URL"}
+              ? t("alice.regenerate")
+              : t("alice.generate")}
         </button>
 
         {statusQuery.data?.linked && (
@@ -157,7 +150,7 @@ function AliceSection() {
             disabled={revokeToken.isPending}
             className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           >
-            {revokeToken.isPending ? "Revoking…" : "Unlink"}
+            {revokeToken.isPending ? t("alice.unlinking") : t("alice.unlink")}
           </button>
         )}
       </div>
@@ -166,6 +159,7 @@ function AliceSection() {
 }
 
 export function PreferencesPage() {
+  const { t } = useTranslation();
   const prefsQuery = useMyPreferences();
   const updatePrefs = useUpdateMyPreferences();
 
@@ -212,16 +206,13 @@ export function PreferencesPage() {
   }
 
   if (prefsQuery.isLoading) {
-    return <p className="text-sm text-slate-500">Loading preferences…</p>;
+    return <p className="text-sm text-slate-500">{t("preferences.loading")}</p>;
   }
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-900">My preferences</h1>
-      <p className="text-xs text-slate-500">
-        These are personal — only you can see and change them. They'll guide how tasks get planned
-        for you once the planning engine ships.
-      </p>
+      <h1 className="text-lg font-semibold text-slate-900">{t("preferences.title")}</h1>
+      <p className="text-xs text-slate-500">{t("preferences.subtitle")}</p>
 
       <NotificationsSection />
       <AliceSection />
@@ -229,7 +220,7 @@ export function PreferencesPage() {
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
         <div className="grid grid-cols-2 gap-3">
           <label className="text-sm">
-            <span className="mb-1 block text-slate-600">Working hours start</span>
+            <span className="mb-1 block text-slate-600">{t("preferences.workingHoursStart")}</span>
             <input
               type="time"
               value={workingStart}
@@ -238,7 +229,7 @@ export function PreferencesPage() {
             />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-slate-600">Working hours end</span>
+            <span className="mb-1 block text-slate-600">{t("preferences.workingHoursEnd")}</span>
             <input
               type="time"
               value={workingEnd}
@@ -247,7 +238,7 @@ export function PreferencesPage() {
             />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-slate-600">Sleep start</span>
+            <span className="mb-1 block text-slate-600">{t("preferences.sleepStart")}</span>
             <input
               type="time"
               value={sleepStart}
@@ -256,7 +247,7 @@ export function PreferencesPage() {
             />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-slate-600">Sleep end</span>
+            <span className="mb-1 block text-slate-600">{t("preferences.sleepEnd")}</span>
             <input
               type="time"
               value={sleepEnd}
@@ -267,21 +258,21 @@ export function PreferencesPage() {
         </div>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-600">Energy pattern</span>
+          <span className="mb-1 block text-slate-600">{t("preferences.energyPattern")}</span>
           <select
             value={energyPattern}
             onChange={(e) => setEnergyPattern(e.target.value as EnergyPattern)}
             className="w-full rounded-md border border-slate-300 px-2 py-1.5"
           >
-            <option value="morning">Morning person</option>
-            <option value="evening">Evening person</option>
-            <option value="steady">Steady throughout the day</option>
+            <option value="morning">{t("preferences.energyMorning")}</option>
+            <option value="evening">{t("preferences.energyEvening")}</option>
+            <option value="steady">{t("preferences.energySteady")}</option>
           </select>
         </label>
 
         <label className="block text-sm">
           <span className="mb-1 block text-slate-600">
-            Task speed multiplier ({taskSpeed}× — 1.0 is average, higher takes longer)
+            {t("preferences.taskSpeed", { speed: taskSpeed })}
           </span>
           <input
             type="number"
@@ -295,29 +286,29 @@ export function PreferencesPage() {
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-600">Preferred task categories (comma-separated)</span>
+          <span className="mb-1 block text-slate-600">{t("preferences.preferredCategories")}</span>
           <input
             type="text"
             value={preferredCategories}
             onChange={(e) => setPreferredCategories(e.target.value)}
-            placeholder="cooking, gardening"
+            placeholder={t("preferences.preferredCategoriesPlaceholder")}
             className="w-full rounded-md border border-slate-300 px-2 py-1.5"
           />
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-600">Disliked task categories (comma-separated)</span>
+          <span className="mb-1 block text-slate-600">{t("preferences.dislikedCategories")}</span>
           <input
             type="text"
             value={dislikedCategories}
             onChange={(e) => setDislikedCategories(e.target.value)}
-            placeholder="laundry"
+            placeholder={t("preferences.dislikedCategoriesPlaceholder")}
             className="w-full rounded-md border border-slate-300 px-2 py-1.5"
           />
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-600">Notes / recurring habits</span>
+          <span className="mb-1 block text-slate-600">{t("preferences.notes")}</span>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -332,10 +323,10 @@ export function PreferencesPage() {
             disabled={updatePrefs.isPending}
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
           >
-            {updatePrefs.isPending ? "Saving…" : "Save"}
+            {updatePrefs.isPending ? t("preferences.saving") : t("common.save")}
           </button>
           {savedMessage && !updatePrefs.isPending && (
-            <span className="text-sm text-emerald-600">Saved.</span>
+            <span className="text-sm text-emerald-600">{t("common.saved")}</span>
           )}
         </div>
       </form>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import type { TaskCreateInput, TaskPriority, User } from "../api/types";
 
 interface TaskFormProps {
@@ -11,6 +12,7 @@ interface TaskFormProps {
 const PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
 export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [assignedTo, setAssignedTo] = useState("");
@@ -40,7 +42,7 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
     <form onSubmit={handleSubmit} className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
       <input
         type="text"
-        placeholder="New task…"
+        placeholder={t("tasks.newTaskPlaceholder")}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
@@ -54,7 +56,7 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
         >
           {PRIORITIES.map((p) => (
             <option key={p} value={p}>
-              {p}
+              {t(`taskPriority.${p}`)}
             </option>
           ))}
         </select>
@@ -64,7 +66,7 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
           onChange={(e) => setAssignedTo(e.target.value)}
           className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
         >
-          <option value="">Unassigned</option>
+          <option value="">{t("tasks.unassigned")}</option>
           {members.map((member) => (
             <option key={member.id} value={member.id}>
               {member.display_name}
@@ -82,7 +84,7 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
         <input
           type="number"
           min={1}
-          placeholder="Duration (min)"
+          placeholder={t("tasks.durationPlaceholder")}
           value={durationMinutes}
           onChange={(e) => setDurationMinutes(e.target.value)}
           className="w-32 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
@@ -93,7 +95,7 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
           disabled={isSubmitting || !title.trim()}
           className="ml-auto rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
         >
-          Add
+          {t("common.add")}
         </button>
       </div>
     </form>

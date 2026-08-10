@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { CalendarEvent, User } from "../api/types";
 
 const TYPE_STYLES: Record<CalendarEvent["event_type"], string> = {
@@ -25,13 +26,14 @@ interface CalendarEventCardProps {
 }
 
 export function CalendarEventCard({ event, owner, isOwn, onDelete }: CalendarEventCardProps) {
+  const { t } = useTranslation();
   return (
     <li className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-slate-900">{event.title}</p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
           <span className={`rounded-full px-2 py-0.5 font-medium ${TYPE_STYLES[event.event_type]}`}>
-            {event.event_type.replace("_", " ")}
+            {t(`eventType.${event.event_type}`)}
           </span>
           <span className="text-slate-500">{formatTimeRange(event.start_at, event.end_at)}</span>
           {owner && <span className="text-slate-400">· {owner.display_name}</span>}
@@ -41,7 +43,7 @@ export function CalendarEventCard({ event, owner, isOwn, onDelete }: CalendarEve
       {isOwn && (
         <button
           type="button"
-          aria-label="Delete event"
+          aria-label={t("calendarEventCard.deleteEvent")}
           onClick={() => onDelete(event)}
           className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600"
         >

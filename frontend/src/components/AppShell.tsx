@@ -1,8 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth/useAuth";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 export function AppShell() {
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
@@ -10,13 +13,14 @@ export function AppShell() {
         <div className="mx-auto flex max-w-2xl items-center justify-between">
           <span className="text-lg font-semibold text-slate-900">Home Manager</span>
           <div className="flex items-center gap-3 text-sm text-slate-600">
+            <LanguageSwitcher />
             <span>{user?.display_name}</span>
             <button
               type="button"
               onClick={() => void logout()}
               className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100"
             >
-              Log out
+              {t("appShell.logout")}
             </button>
           </div>
         </div>
@@ -28,12 +32,12 @@ export function AppShell() {
 
       <nav className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto flex max-w-2xl">
-          <NavTab to="/" label="Today" />
-          <NavTab to="/tasks" label="Tasks" />
-          <NavTab to="/calendar" label="Calendar" />
-          <NavTab to="/devices" label="Devices" />
-          <NavTab to="/assistant" label="Assistant" />
-          <NavTab to="/preferences" label="Prefs" />
+          <NavTab to="/" label={t("nav.today")} />
+          <NavTab to="/tasks" label={t("nav.tasks")} />
+          <NavTab to="/calendar" label={t("nav.calendar")} />
+          <NavTab to="/devices" label={t("nav.devices")} />
+          <NavTab to="/assistant" label={t("nav.assistant")} />
+          <NavTab to="/preferences" label={t("nav.preferences")} />
         </div>
       </nav>
     </div>

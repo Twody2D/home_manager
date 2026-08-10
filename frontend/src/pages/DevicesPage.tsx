@@ -1,20 +1,22 @@
+import { useTranslation } from "react-i18next";
 import { useDevices, useExecuteCommand } from "../hooks/useSmartHome";
 import type { SmartHomeDevice } from "../api/types";
 
 function DeviceRow({ device }: { device: SmartHomeDevice }) {
+  const { t } = useTranslation();
   const executeCommand = useExecuteCommand();
 
   return (
     <li className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
       <div>
         <p className="text-sm font-medium text-slate-900">{device.name}</p>
-        <p className="text-xs text-slate-500">{device.is_on ? "On" : "Off"}</p>
+        <p className="text-xs text-slate-500">{device.is_on ? t("devices.on") : t("devices.off")}</p>
       </div>
       <button
         type="button"
         role="switch"
         aria-checked={device.is_on}
-        aria-label={`Toggle ${device.name}`}
+        aria-label={t("devices.toggle", { name: device.name })}
         onClick={() =>
           executeCommand.mutate({ entityId: device.entity_id, command: "toggle" })
         }
@@ -34,24 +36,25 @@ function DeviceRow({ device }: { device: SmartHomeDevice }) {
 }
 
 export function DevicesPage() {
+  const { t } = useTranslation();
   const devicesQuery = useDevices();
 
   if (devicesQuery.isLoading) {
-    return <p className="text-sm text-slate-500">Loading devices…</p>;
+    return <p className="text-sm text-slate-500">{t("devices.loading")}</p>;
   }
 
   if (devicesQuery.isError) {
-    return <p className="text-sm text-red-600">Failed to load devices.</p>;
+    return <p className="text-sm text-red-600">{t("devices.error")}</p>;
   }
 
   const devices = devicesQuery.data ?? [];
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-900">Devices</h1>
+      <h1 className="text-lg font-semibold text-slate-900">{t("devices.title")}</h1>
 
       {devices.length === 0 ? (
-        <p className="text-sm text-slate-500">No controllable devices found.</p>
+        <p className="text-sm text-slate-500">{t("devices.empty")}</p>
       ) : (
         <ul className="space-y-2">
           {devices.map((device) => (

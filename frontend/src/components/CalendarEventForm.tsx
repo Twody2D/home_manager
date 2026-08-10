@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import type { CalendarEventCreateInput, CalendarEventType } from "../api/types";
 
 interface CalendarEventFormProps {
@@ -22,6 +23,7 @@ function toIsoOrNull(localDateTime: string): string | null {
 }
 
 export function CalendarEventForm({ onSubmit, isSubmitting }: CalendarEventFormProps) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [eventType, setEventType] = useState<CalendarEventType>("meeting");
   const [start, setStart] = useState("");
@@ -44,7 +46,7 @@ export function CalendarEventForm({ onSubmit, isSubmitting }: CalendarEventFormP
     <form onSubmit={handleSubmit} className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
       <input
         type="text"
-        placeholder="New event…"
+        placeholder={t("calendar.newEventPlaceholder")}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
@@ -58,7 +60,7 @@ export function CalendarEventForm({ onSubmit, isSubmitting }: CalendarEventFormP
         >
           {EVENT_TYPES.map((type) => (
             <option key={type} value={type}>
-              {type.replace("_", " ")}
+              {t(`eventType.${type}`)}
             </option>
           ))}
         </select>
@@ -82,7 +84,7 @@ export function CalendarEventForm({ onSubmit, isSubmitting }: CalendarEventFormP
           disabled={isSubmitting || !title.trim() || !start || !end}
           className="ml-auto rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
         >
-          Add
+          {t("common.add")}
         </button>
       </div>
     </form>

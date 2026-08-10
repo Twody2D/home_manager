@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { TaskCard } from "../components/TaskCard";
 import { useMembers } from "../hooks/useMembers";
 import { useDeleteTask, useTasks, useUpdateTask } from "../hooks/useTasks";
@@ -41,6 +42,7 @@ function partitionByDueDate(tasks: Task[]) {
 }
 
 export function DashboardPage() {
+  const { t, i18n } = useTranslation();
   const tasksQuery = useTasks({ status: "pending", limit: 100 });
   const membersQuery = useMembers();
   const planQuery = useDailyPlan();
@@ -59,32 +61,30 @@ export function DashboardPage() {
   }
 
   if (tasksQuery.isLoading) {
-    return <p className="text-sm text-slate-500">Loading today’s plan…</p>;
+    return <p className="text-sm text-slate-500">{t("dashboard.loading")}</p>;
   }
 
   if (tasksQuery.isError) {
-    return <p className="text-sm text-red-600">Failed to load today’s plan.</p>;
+    return <p className="text-sm text-red-600">{t("dashboard.error")}</p>;
   }
 
   const { overdue, today, other } = partitionByDueDate(tasksQuery.data?.items ?? []);
+  const dateLabel = new Date().toLocaleDateString(i18n.language, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
     <div className="space-y-6">
       <h1 className="text-lg font-semibold text-slate-900">
-        Today,{" "}
-        {new Date().toLocaleDateString(undefined, {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-        })}
+        {t("dashboard.title", { date: dateLabel })}
       </h1>
 
       {planQuery.data && (
-        <Section title="Suggested schedule">
+        <Section title={t("dashboard.suggestedSchedule")}>
           {planQuery.data.scheduled.length === 0 && planQuery.data.unscheduled.length === 0 && (
-            <p className="text-sm text-slate-500">
-              Nothing to schedule — assign yourself a task with a duration to see a plan here.
-            </p>
+            <p className="text-sm text-slate-500">{t("dashboard.noSchedule")}</p>
           )}
           {planQuery.data.scheduled.map((entry) => (
             <li
@@ -110,11 +110,11 @@ export function DashboardPage() {
       )}
 
       {overdue.length === 0 && today.length === 0 && other.length === 0 && (
-        <p className="text-sm text-slate-500">Nothing pending — enjoy your day.</p>
+        <p className="text-sm text-slate-500">{t("dashboard.nothingPending")}</p>
       )}
 
       {overdue.length > 0 && (
-        <Section title="Overdue">
+        <Section title={t("dashboard.overdue")}>
           {overdue.map((task) => (
             <TaskCard
               key={task.id}
@@ -129,7 +129,7 @@ export function DashboardPage() {
       )}
 
       {today.length > 0 && (
-        <Section title="Due today">
+        <Section title={t("dashboard.dueToday")}>
           {today.map((task) => (
             <TaskCard
               key={task.id}
@@ -144,7 +144,7 @@ export function DashboardPage() {
       )}
 
       {other.length > 0 && (
-        <Section title="Not scheduled">
+        <Section title={t("dashboard.notScheduled")}>
           {other.map((task) => (
             <TaskCard
               key={task.id}

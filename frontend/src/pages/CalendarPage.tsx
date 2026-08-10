@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { CalendarEventForm } from "../components/CalendarEventForm";
 import { CalendarEventCard } from "../components/CalendarEventCard";
 import { useCalendarEvents, useCreateEvent, useDeleteEvent } from "../hooks/useCalendar";
@@ -6,10 +7,10 @@ import { useMembers } from "../hooks/useMembers";
 import { useAuth } from "../auth/useAuth";
 import type { CalendarEvent } from "../api/types";
 
-function groupByDay(events: CalendarEvent[]): [string, CalendarEvent[]][] {
+function groupByDay(events: CalendarEvent[], locale: string): [string, CalendarEvent[]][] {
   const groups = new Map<string, CalendarEvent[]>();
   for (const event of events) {
-    const key = new Date(event.start_at).toLocaleDateString(undefined, {
+    const key = new Date(event.start_at).toLocaleDateString(locale, {
       weekday: "long",
       month: "long",
       day: "numeric",
@@ -25,6 +26,7 @@ function groupByDay(events: CalendarEvent[]): [string, CalendarEvent[]][] {
 }
 
 export function CalendarPage() {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   // Stable for the page's lifetime — recomputing this on every render would
   // change the query key each time and the query would never settle.
@@ -38,21 +40,19 @@ export function CalendarPage() {
   const membersById = new Map(members.map((member) => [member.id, member]));
 
   if (eventsQuery.isLoading) {
-    return <p className="text-sm text-slate-500">Loading calendar…</p>;
+    return <p className="text-sm text-slate-500">{t("calendar.loading")}</p>;
   }
 
   if (eventsQuery.isError) {
-    return <p className="text-sm text-red-600">Failed to load calendar.</p>;
+    return <p className="text-sm text-red-600">{t("calendar.error")}</p>;
   }
 
-  const grouped = groupByDay(eventsQuery.data ?? []);
+  const grouped = groupByDay(eventsQuery.data ?? [], i18n.language);
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-900">Calendar</h1>
-      <p className="text-xs text-slate-500">
-        You can only add or remove your own events, but you can see the whole household's schedule.
-      </p>
+      <h1 className="text-lg font-semibold text-slate-900">{t("calendar.title")}</h1>
+      <p className="text-xs text-slate-500">{t("calendar.subtitle")}</p>
 
       <CalendarEventForm
         isSubmitting={createEvent.isPending}
@@ -62,7 +62,7 @@ export function CalendarPage() {
       />
 
       {grouped.length === 0 && (
-        <p className="text-sm text-slate-500">No upcoming events for the household.</p>
+        <p className="text-sm text-slate-500">{t("calendar.empty")}</p>
       )}
 
       {grouped.map(([day, events]) => (

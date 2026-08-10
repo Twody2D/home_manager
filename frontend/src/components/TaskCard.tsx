@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { Task, User } from "../api/types";
 
 const PRIORITY_STYLES: Record<Task["priority"], string> = {
@@ -16,13 +17,14 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, assignee, onToggleComplete, onDelete, isUpdating }: TaskCardProps) {
+  const { t, i18n } = useTranslation();
   const isCompleted = task.status === "completed";
 
   return (
     <li className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
       <button
         type="button"
-        aria-label={isCompleted ? "Mark as pending" : "Mark as completed"}
+        aria-label={isCompleted ? t("taskCard.markAsPending") : t("taskCard.markAsCompleted")}
         onClick={() => onToggleComplete(task)}
         disabled={isUpdating}
         className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
@@ -43,11 +45,11 @@ export function TaskCard({ task, assignee, onToggleComplete, onDelete, isUpdatin
         {task.description && <p className="mt-0.5 text-xs text-slate-500">{task.description}</p>}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
           <span className={`rounded-full px-2 py-0.5 font-medium ${PRIORITY_STYLES[task.priority]}`}>
-            {task.priority}
+            {t(`taskPriority.${task.priority}`)}
           </span>
           {task.due_at && (
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
-              Due {new Date(task.due_at).toLocaleString()}
+              {t("taskCard.due", { date: new Date(task.due_at).toLocaleString(i18n.language) })}
             </span>
           )}
           {assignee && (
@@ -60,7 +62,7 @@ export function TaskCard({ task, assignee, onToggleComplete, onDelete, isUpdatin
 
       <button
         type="button"
-        aria-label="Delete task"
+        aria-label={t("taskCard.deleteTask")}
         onClick={() => onDelete(task)}
         className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600"
       >

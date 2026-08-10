@@ -1,17 +1,19 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { TaskForm } from "../components/TaskForm";
 import { TaskCard } from "../components/TaskCard";
 import { useCreateTask, useDeleteTask, useTasks, useUpdateTask } from "../hooks/useTasks";
 import { useMembers } from "../hooks/useMembers";
 import type { Task, TaskStatus } from "../api/types";
 
-const FILTERS: { label: string; value: TaskStatus | "all" }[] = [
-  { label: "All", value: "all" },
-  { label: "Pending", value: "pending" },
-  { label: "Completed", value: "completed" },
+const FILTERS: { labelKey: string; value: TaskStatus | "all" }[] = [
+  { labelKey: "tasks.filterAll", value: "all" },
+  { labelKey: "tasks.filterPending", value: "pending" },
+  { labelKey: "tasks.filterCompleted", value: "completed" },
 ];
 
 export function TasksPage() {
+  const { t } = useTranslation();
   const [filter, setFilter] = useState<TaskStatus | "all">("all");
 
   const tasksQuery = useTasks(filter === "all" ? {} : { status: filter });
@@ -32,7 +34,7 @@ export function TasksPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-900">Tasks</h1>
+      <h1 className="text-lg font-semibold text-slate-900">{t("tasks.title")}</h1>
 
       <TaskForm
         members={members}
@@ -52,18 +54,18 @@ export function TasksPage() {
               filter === f.value ? "bg-blue-600 text-white" : "bg-white text-slate-600"
             }`}
           >
-            {f.label}
+            {t(f.labelKey)}
           </button>
         ))}
       </div>
 
-      {tasksQuery.isLoading && <p className="text-sm text-slate-500">Loading tasks…</p>}
-      {tasksQuery.isError && <p className="text-sm text-red-600">Failed to load tasks.</p>}
+      {tasksQuery.isLoading && <p className="text-sm text-slate-500">{t("tasks.loading")}</p>}
+      {tasksQuery.isError && <p className="text-sm text-red-600">{t("tasks.error")}</p>}
 
       {tasksQuery.data && (
         <>
           {tasksQuery.data.items.length === 0 ? (
-            <p className="text-sm text-slate-500">No tasks here yet.</p>
+            <p className="text-sm text-slate-500">{t("tasks.empty")}</p>
           ) : (
             <ul className="space-y-2">
               {tasksQuery.data.items.map((task) => (
