@@ -1,7 +1,93 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useMyPreferences, useUpdateMyPreferences } from "../hooks/usePreferences";
+import {
+  isPushSupported,
+  useCurrentPushSubscription,
+  useDisablePushNotifications,
+  useEnablePushNotifications,
+  useSendTestNotification,
+} from "../hooks/useNotifications";
+import { ApiError } from "../api/client";
 import type { EnergyPattern } from "../api/types";
+
+function NotificationsSection() {
+  const subscriptionQuery = useCurrentPushSubscription();
+  const enable = useEnablePushNotifications();
+  const disable = useDisablePushNotifications();
+  const sendTest = useSendTestNotification();
+
+  if (!isPushSupported()) {
+    return (
+      <section className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-slate-900">Notifications</h2>
+        <p className="text-sm text-slate-500">
+          This browser doesn't support push notifications.
+        </p>
+      </section>
+    );
+  }
+
+  const isSubscribed = Boolean(subscriptionQuery.data);
+  const errorMessage =
+    enable.error instanceof ApiError
+      ? enable.error.message
+      : enable.error instanceof Error
+        ? enable.error.message
+        : null;
+
+  return (
+    <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+      <h2 className="text-sm font-semibold text-slate-900">Notifications</h2>
+      <p className="text-xs text-slate-500">
+        Get notified on this device when someone assigns you a task.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {isSubscribed ? (
+          <button
+            type="button"
+            onClick={() => disable.mutate()}
+            disabled={disable.isPending}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {disable.isPending ? "Disabling…" : "Disable notifications"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => enable.mutate()}
+            disabled={enable.isPending}
+            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {enable.isPending ? "Enabling…" : "Enable notifications"}
+          </button>
+        )}
+
+        {isSubscribed && (
+          <button
+            type="button"
+            onClick={() => sendTest.mutate()}
+            disabled={sendTest.isPending}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {sendTest.isPending ? "Sending…" : "Send test notification"}
+          </button>
+        )}
+      </div>
+
+      {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+      {sendTest.isSuccess && sendTest.data.sent === 0 && (
+        <p className="text-sm text-amber-600">
+          No notification was delivered — the server may not have push configured yet.
+        </p>
+      )}
+      {sendTest.isSuccess && sendTest.data.sent > 0 && (
+        <p className="text-sm text-emerald-600">Test notification sent.</p>
+      )}
+    </section>
+  );
+}
 
 function toCsv(items: string[]): string {
   return items.join(", ");
@@ -71,6 +157,8 @@ export function PreferencesPage() {
         These are personal — only you can see and change them. They'll guide how tasks get planned
         for you once the planning engine ships.
       </p>
+
+      <NotificationsSection />
 
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
         <div className="grid grid-cols-2 gap-3">

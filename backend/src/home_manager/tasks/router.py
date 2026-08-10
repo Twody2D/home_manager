@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from home_manager.auth.dependencies import get_current_user
 from home_manager.auth.models import User
 from home_manager.db.session import get_db_session
+from home_manager.notifications import service as notifications_service
 from home_manager.tasks import service
 from home_manager.tasks.models import TaskStatus
 from home_manager.tasks.schemas import TaskCreate, TaskListResponse, TaskResponse, TaskUpdate
@@ -25,6 +26,16 @@ async def create_task(
         session, tenant_id=current_user.tenant_id, created_by=current_user.id, payload=payload
     )
     await session.commit()
+
+    if task.assigned_to is not None and task.assigned_to != current_user.id:
+        await notifications_service.send_push(
+            session,
+            tenant_id=current_user.tenant_id,
+            user_id=task.assigned_to,
+            title="New task assigned",
+            body=task.title,
+        )
+
     return TaskResponse.model_validate(task)
 
 

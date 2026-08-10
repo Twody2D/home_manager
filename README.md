@@ -13,8 +13,9 @@ AI-помощник, интеграция с Яндекс Алисой и умн
 - Milestone 4 — calendar (availability), preferences
 - Milestone 5 — planning engine (deterministic daily scheduler)
 - Milestone 6 — AI provider abstraction (Mock/Gemini) + task-creation assistant
+- Milestone 7 — web push notifications (task assignment alerts)
 
-Далее — Milestone 7 (notifications / web push).
+Далее — Milestone 8 (интеграция с Алисой).
 
 ## Архитектура
 
@@ -42,7 +43,14 @@ docker compose exec backend python -m alembic upgrade head
 Backend напрямую (в обход nginx, для отладки API) — на `http://localhost:8000`, эндпоинты под
 `/api/v1/` (`/api/v1/health/live`, `/api/v1/health/ready`, `/api/v1/auth/*`, `/api/v1/tasks`,
 `/api/v1/users`, `/api/v1/calendar/events`, `/api/v1/preferences/me`, `/api/v1/planning/plan`,
-`/api/v1/assistant/message`).
+`/api/v1/assistant/message`, `/api/v1/notifications/*`).
+
+Web push is disabled by default. To enable it locally, generate a VAPID keypair and set
+`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` in `.env`:
+
+```bash
+cd backend && uv run python scripts/generate_vapid_keys.py
+```
 
 Локальная разработка backend без Docker (Postgres всё равно поднимается контейнером):
 

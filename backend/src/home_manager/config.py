@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     llm_model: str = "gemini-2.0-flash"
     gemini_api_key: str | None = None
 
+    # Web push is disabled (subscribe/send become no-ops) unless both keys
+    # are set. Generate a pair with: uv run python scripts/generate_vapid_keys.py
+    vapid_public_key: str | None = None
+    vapid_private_key: str | None = None
+    vapid_subject: str = "mailto:admin@example.com"
+
 
 @lru_cache
 def get_settings() -> Settings:

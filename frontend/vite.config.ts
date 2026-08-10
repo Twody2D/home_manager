@@ -11,6 +11,15 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["icons/icon-180.png"],
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      injectManifest: {
+        // App shell (HTML/JS/CSS/icons) is cached for offline install; API
+        // calls are intentionally left to the network — caching task data
+        // would need an explicit conflict-reconciliation strategy first.
+        globPatterns: ["**/*.{js,css,html,png,svg,ico}"],
+      },
       manifest: {
         name: "Home Manager",
         short_name: "Home Manager",
@@ -30,13 +39,6 @@ export default defineConfig({
             purpose: "maskable",
           },
         ],
-      },
-      workbox: {
-        // App shell (HTML/JS/CSS/icons) is cached for offline install; API
-        // calls are intentionally left to the network — caching task data
-        // would need an explicit conflict-reconciliation strategy first.
-        globPatterns: ["**/*.{js,css,html,png,svg,ico}"],
-        navigateFallbackDenylist: [/^\/api\//],
       },
       devOptions: {
         enabled: false,

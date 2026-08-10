@@ -14,6 +14,9 @@ from home_manager.calendar import (
 )
 from home_manager.config import get_settings
 from home_manager.db.base import Base
+from home_manager.notifications import (
+    models as notifications_models,  # noqa: F401  (registers tables on Base.metadata)
+)
 from home_manager.preferences import (
     models as preferences_models,  # noqa: F401  (registers tables on Base.metadata)
 )
