@@ -9,6 +9,11 @@ _SCHEDULE_PREFIX_RE = re.compile(r"^schedule\s*:\s*", re.IGNORECASE)
 _SCHEDULE_ITEM_RE = re.compile(
     r"(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<start>\d{2}:\d{2})-(?P<end>\d{2}:\d{2})\s+(?P<type>\w+)"
 )
+_PATTERN_PREFIX_RE = re.compile(r"^pattern\s*:\s*", re.IGNORECASE)
+_PATTERN_RE = re.compile(
+    r"weekdays=(?P<weekdays>[\d,]+)\s+from=(?P<from>\d{4}-\d{2}-\d{2})\s+"
+    r"to=(?P<to>\d{4}-\d{2}-\d{2})\s+(?P<start>\d{2}:\d{2})-(?P<end>\d{2}:\d{2})\s+(?P<type>\w+)"
+)
 
 
 class MockLLMProvider:
@@ -28,7 +33,25 @@ class MockLLMProvider:
         text = user_message.strip()
         lowered = text.lower()
 
-        if _SCHEDULE_PREFIX_RE.match(text):
+        if _PATTERN_PREFIX_RE.match(text):
+            rest = _PATTERN_PREFIX_RE.sub("", text)
+            m = _PATTERN_RE.search(rest)
+            if m:
+                payload: dict[str, object] = {
+                    "intent": "create_schedule",
+                    "pattern": {
+                        "weekdays": [int(d) for d in m.group("weekdays").split(",")],
+                        "date_from": m.group("from"),
+                        "date_to": m.group("to"),
+                        "start_time": m.group("start"),
+                        "end_time": m.group("end"),
+                        "event_type": m.group("type"),
+                        "title": None,
+                    },
+                }
+            else:
+                payload = {"intent": "unknown", "raw_message": text}
+        elif _SCHEDULE_PREFIX_RE.match(text):
             rest = _SCHEDULE_PREFIX_RE.sub("", text)
             events = [
                 {
@@ -40,7 +63,7 @@ class MockLLMProvider:
                 }
                 for m in _SCHEDULE_ITEM_RE.finditer(rest)
             ]
-            payload: dict[str, object] = (
+            payload = (
                 {"intent": "create_schedule", "events": events}
                 if events
                 else {"intent": "unknown", "raw_message": text}

@@ -11,6 +11,8 @@ from home_manager.assistant.schemas import (
     AssistantReply,
     CreateScheduleIntent,
     CreateTaskIntent,
+    ScheduleEventItem,
+    SchedulePattern,
     UnknownIntent,
 )
 from home_manager.calendar.schemas import CalendarEventCreate
@@ -67,10 +69,17 @@ def _build_system_prompt(now: datetime) -> str:
         f"{_build_date_lookup_table(now)}\n"
         'To create a single task: {"intent": "create_task", "title": "...", '
         '"duration_minutes": <int or null>}\n'
-        "To record one or more calendar entries — a work shift, sleep schedule, a repeating "
-        'pattern like "I work Mon-Fri 9 to 6" or "I\'m off Saturday and Sunday", or several '
-        "shifts listed at once — expand every date the user implies into its own item and "
-        'reply: {"intent": "create_schedule", "events": [{"date": "YYYY-MM-DD", '
+        "For calendar entries, use whichever of these two shapes fits the request:\n"
+        '1) A repeating weekday pattern over a date range (e.g. "work Mon-Fri this month", '
+        '"every weekday in August", "off Sat/Sun for the next 2 weeks") — do NOT enumerate '
+        "every date yourself, reply with the pattern instead and let the range stand for "
+        'itself: {"intent": "create_schedule", "pattern": {"weekdays": [1,2,3,4,5], '
+        '"date_from": "YYYY-MM-DD", "date_to": "YYYY-MM-DD", "start_time": "HH:MM", '
+        '"end_time": "HH:MM", "event_type": one of "working_hours"/"sleep"/"meeting"/'
+        '"sport"/"trip"/"personal"/"unavailable", "title": "..." or null}} '
+        "(weekdays are ISO numbers: 1=Monday .. 7=Sunday)\n"
+        "2) A handful of specific/irregular shifts on different dates — list each one "
+        'explicitly: {"intent": "create_schedule", "events": [{"date": "YYYY-MM-DD", '
         '"start_time": "HH:MM", "end_time": "HH:MM", "event_type": one of '
         '"working_hours"/"sleep"/"meeting"/"sport"/"trip"/"personal"/"unavailable", '
         '"title": "..." or null}]}\n'
@@ -175,6 +184,31 @@ def _default_schedule_title(event_type: str, locale: str) -> str:
     return _EVENT_TYPE_LABELS[lang].get(event_type, event_type.replace("_", " ").capitalize())
 
 
+def _expand_pattern(pattern: SchedulePattern) -> list[ScheduleEventItem]:
+    """Turns a weekday/range pattern into one item per matching date.
+
+    Plain date iteration, done here instead of by the LLM — see
+    SchedulePattern's docstring for why.
+    """
+    start = date.fromisoformat(pattern.date_from)
+    end = date.fromisoformat(pattern.date_to)
+    items: list[ScheduleEventItem] = []
+    cursor = start
+    while cursor <= end:
+        if cursor.isoweekday() in pattern.weekdays:
+            items.append(
+                ScheduleEventItem(
+                    date=cursor.isoformat(),
+                    start_time=pattern.start_time,
+                    end_time=pattern.end_time,
+                    event_type=pattern.event_type,
+                    title=pattern.title,
+                )
+            )
+        cursor += timedelta(days=1)
+    return items
+
+
 async def execute_intent(
     session: AsyncSession,
     *,
@@ -210,8 +244,12 @@ async def execute_intent(
     if isinstance(intent, CreateScheduleIntent):
         _, offset = _parse_client_now(client_now)
         try:
+            schedule_items = list(intent.events)
+            if intent.pattern is not None:
+                schedule_items.extend(_expand_pattern(intent.pattern))
+
             items: list[CalendarEventCreate] = []
-            for item in intent.events:
+            for item in schedule_items:
                 end_date = item.date
                 # Overnight shift: end time doesn't come after start time on
                 # the same day, so it must roll into the next calendar day.
@@ -231,6 +269,14 @@ async def execute_intent(
             # returned nonsense for degrades to a normal "didn't understand"
             # reply instead of a 500, same as any other unparseable output.
             return AssistantReply(reply=_reply_text(locale, "schedule_parse_error"), task_id=None)
+
+        if not items:
+            return AssistantReply(reply=_reply_text(locale, "schedule_parse_error"), task_id=None)
+
+        # The confirm step submits this list as-is to the calendar bulk-create
+        # endpoint, which caps a single request at 60 events — trim here too
+        # so an oversized range (e.g. several months) doesn't 422 on confirm.
+        items = items[:60]
 
         # Deliberately not persisted here — see AssistantReply.proposed_events.
         # The caller reviews/trims this list and saves it via the normal

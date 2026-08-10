@@ -1,7 +1,7 @@
 import uuid
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from home_manager.calendar.models import CalendarEventType
 from home_manager.calendar.schemas import CalendarEventCreate
@@ -21,10 +21,43 @@ class ScheduleEventItem(BaseModel):
     title: str | None = Field(default=None, max_length=200)
 
 
+class SchedulePattern(BaseModel):
+    """A repeating weekday pattern over a date range.
+
+    Deliberately not a list of dates — small models are unreliable at
+    enumerating many dates by hand (tested: it silently dropped most of a
+    month-long range). This shape only asks the model for ~6 short fields;
+    service.py expands it into individual dates itself, the same
+    deterministic way the calendar page's own bulk-schedule generator does.
+    """
+
+    weekdays: list[int] = Field(min_length=1, max_length=7)
+    date_from: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    date_to: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    start_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+    end_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+    event_type: CalendarEventType
+    title: str | None = Field(default=None, max_length=200)
+
+    @field_validator("weekdays")
+    @classmethod
+    def _validate_weekdays(cls, value: list[int]) -> list[int]:
+        if any(day < 1 or day > 7 for day in value):
+            raise ValueError("weekdays must be ISO weekday numbers 1 (Mon) to 7 (Sun)")
+        return sorted(set(value))
+
+
 class CreateScheduleIntent(BaseModel):
     intent: Literal["create_schedule"] = "create_schedule"
     # Bounded the same as the calendar bulk-create endpoint it feeds into.
-    events: list[ScheduleEventItem] = Field(min_length=1, max_length=60)
+    events: list[ScheduleEventItem] = Field(default_factory=list, max_length=60)
+    pattern: SchedulePattern | None = None
+
+    @model_validator(mode="after")
+    def _require_events_or_pattern(self) -> Self:
+        if not self.events and self.pattern is None:
+            raise ValueError("create_schedule requires events or a pattern")
+        return self
 
 
 class UnknownIntent(BaseModel):

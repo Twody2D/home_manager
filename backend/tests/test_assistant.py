@@ -140,6 +140,61 @@ async def test_schedule_message_rolls_overnight_shift_to_next_day(
 
 
 @pytest.mark.asyncio
+async def test_pattern_message_expands_every_matching_weekday(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    # 2026-08-03 and 2026-08-31 are both Mondays — 4 full Mon-Fri weeks plus
+    # the trailing Monday, so 21 matching weekdays in total.
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": (
+                "pattern: weekdays=1,2,3,4,5 from=2026-08-03 to=2026-08-31 "
+                "09:00-18:00 working_hours"
+            ),
+            "client_now": "2026-08-01T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    proposed = body["proposed_events"]
+    assert len(proposed) == 21
+    late_dates = {
+        event["start_at"][:10] for event in proposed if event["start_at"][:10] > "2026-08-29"
+    }
+    assert late_dates == {"2026-08-31"}
+    assert all(event["start_at"][11:16] == "09:00" for event in proposed)
+
+
+@pytest.mark.asyncio
+async def test_pattern_message_with_no_matching_weekdays_degrades_gracefully(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    # 2026-08-11 is a Tuesday; asking only for Saturdays (6) in a one-day
+    # range matches nothing.
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": (
+                "pattern: weekdays=6 from=2026-08-11 to=2026-08-11 09:00-18:00 working_hours"
+            ),
+            "client_now": "2026-08-01T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["proposed_events"] is None
+
+
+@pytest.mark.asyncio
 async def test_schedule_message_with_impossible_date_degrades_gracefully(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:
