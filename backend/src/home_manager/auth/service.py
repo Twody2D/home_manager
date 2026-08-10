@@ -109,6 +109,15 @@ async def issue_token_pair(
     )
 
 
+#  Two nearly-simultaneous requests can both present the same (still valid at
+# read time) refresh token — e.g. two tabs, or several queued requests woken
+# up together after the app was backgrounded, all holding the same expired
+# access token and racing to refresh it. Without tolerance for that, the
+# loser gets an "invalid token" for what's really just a timing race, not a
+# stolen/replayed token, and is forced into a full re-login.
+_REUSE_GRACE_PERIOD = timedelta(seconds=30)
+
+
 async def rotate_refresh_token(
     session: AsyncSession, *, raw_token: str, user_agent: str | None
 ) -> TokenPair:
@@ -116,8 +125,26 @@ async def rotate_refresh_token(
     stored = await session.scalar(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
 
     now = datetime.now(UTC)
-    if stored is None or stored.revoked_at is not None or stored.expires_at < now:
+    if stored is None or stored.expires_at < now:
         raise InvalidRefreshTokenError()
+
+    if stored.revoked_at is not None:
+        # Already rotated by a racing request. If that happened moments ago
+        # and the token it was replaced by is still good, catch this client
+        # up to that point instead of rejecting it outright.
+        if now - stored.revoked_at > _REUSE_GRACE_PERIOD:
+            raise InvalidRefreshTokenError()
+        leaf = stored
+        for _ in range(5):
+            if leaf.replaced_by_id is None:
+                break
+            next_leaf = await session.get(RefreshToken, leaf.replaced_by_id)
+            if next_leaf is None:
+                raise InvalidRefreshTokenError()
+            leaf = next_leaf
+        if leaf.revoked_at is not None or leaf.expires_at < now:
+            raise InvalidRefreshTokenError()
+        stored = leaf
 
     user = await session.get(User, stored.user_id)
     if user is None or not user.is_active:

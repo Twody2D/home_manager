@@ -1,5 +1,8 @@
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import text
+
+from home_manager.db.session import get_engine
 
 REGISTER_PAYLOAD = {
     "household_name": "Pasha & Lena",
@@ -134,7 +137,7 @@ async def test_me_rejects_garbage_token(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_refresh_rotates_token_and_old_one_stops_working(client: AsyncClient) -> None:
+async def test_refresh_rotates_token(client: AsyncClient) -> None:
     await _register(client)
     old_refresh_cookie = client.cookies["refresh_token"]
     old_csrf_cookie = client.cookies["csrf_token"]
@@ -144,7 +147,54 @@ async def test_refresh_rotates_token_and_old_one_stops_working(client: AsyncClie
     assert response.status_code == 200
     assert client.cookies["refresh_token"] != old_refresh_cookie
 
-    # The rotated-out refresh token must no longer work.
+
+@pytest.mark.asyncio
+async def test_refresh_reuse_within_grace_period_still_works(client: AsyncClient) -> None:
+    """Two requests can race on the same refresh token — e.g. two tabs, or
+
+    several queued requests woken up together after the app was
+    backgrounded, both holding the same expired access token. The loser of
+    that race must not be forced into a full re-login over a timing issue,
+    so a token reused shortly after being rotated out gets a fresh pair
+    instead of a hard rejection.
+    """
+    await _register(client)
+    old_refresh_cookie = client.cookies["refresh_token"]
+    old_csrf_cookie = client.cookies["csrf_token"]
+
+    first = await client.post("/api/v1/auth/refresh", headers={"X-CSRF-Token": old_csrf_cookie})
+    assert first.status_code == 200
+
+    # Replay the now-superseded token, as the losing side of the race would.
+    client.cookies.set("refresh_token", old_refresh_cookie)
+    client.cookies.set("csrf_token", old_csrf_cookie)
+    second = await client.post("/api/v1/auth/refresh", headers={"X-CSRF-Token": old_csrf_cookie})
+
+    assert second.status_code == 200
+    assert second.json()["access_token"]
+
+
+@pytest.mark.asyncio
+async def test_refresh_reuse_after_grace_period_is_rejected(client: AsyncClient) -> None:
+    await _register(client)
+    old_refresh_cookie = client.cookies["refresh_token"]
+    old_csrf_cookie = client.cookies["csrf_token"]
+
+    response = await client.post("/api/v1/auth/refresh", headers={"X-CSRF-Token": old_csrf_cookie})
+    assert response.status_code == 200
+
+    # Backdate the rotation so the reuse grace window has already elapsed —
+    # simulates a token surfacing well after it was superseded (theft/replay,
+    # not a same-moment race).
+    engine = get_engine()
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "UPDATE refresh_tokens SET revoked_at = revoked_at - INTERVAL '1 hour' "
+                "WHERE revoked_at IS NOT NULL"
+            )
+        )
+
     client.cookies.set("refresh_token", old_refresh_cookie)
     client.cookies.set("csrf_token", old_csrf_cookie)
     reuse_response = await client.post(

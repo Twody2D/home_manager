@@ -171,6 +171,32 @@ async def test_pattern_message_expands_every_matching_weekday(
 
 
 @pytest.mark.asyncio
+async def test_pattern_message_skips_excluded_dates(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": (
+                "pattern: weekdays=1,2,3,4,5 from=2026-08-03 to=2026-08-31 "
+                "09:00-18:00 working_hours exclude=2026-08-12,2026-08-13"
+            ),
+            "client_now": "2026-08-01T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    proposed = response.json()["proposed_events"]
+    dates = {event["start_at"][:10] for event in proposed}
+    assert len(proposed) == 19
+    assert "2026-08-12" not in dates
+    assert "2026-08-13" not in dates
+
+
+@pytest.mark.asyncio
 async def test_pattern_message_with_no_matching_weekdays_degrades_gracefully(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

@@ -76,10 +76,16 @@ def _build_system_prompt(now: datetime) -> str:
         'itself: {"intent": "create_schedule", "pattern": {"weekdays": [1,2,3,4,5], '
         '"date_from": "YYYY-MM-DD", "date_to": "YYYY-MM-DD", "start_time": "HH:MM", '
         '"end_time": "HH:MM", "event_type": one of "working_hours"/"sleep"/"meeting"/'
-        '"sport"/"trip"/"personal"/"unavailable", "title": "..." or null}} '
+        '"sport"/"trip"/"personal"/"unavailable", "title": "..." or null, '
+        '"exclude_dates": ["YYYY-MM-DD", ...]}} '
         '(weekdays are ISO numbers: 1=Monday .. 7=Sunday). A range phrased as "Monday to '
         'Friday" (or "с понедельника по пятницу") is INCLUSIVE of both ends — that means '
-        "weekdays: [1,2,3,4,5], Friday included, not [1,2,3,4].\n"
+        "weekdays: [1,2,3,4,5], Friday included, not [1,2,3,4]. A schedule phrased as a ratio "
+        'like "5/2" or "2/2" with no other detail means a standard working week — treat "5/2" '
+        "as weekdays [1,2,3,4,5] (Mon-Fri) unless the user names specific different days off. "
+        'Any date the user excludes ("except the 12th and 13th", "кроме 12 и 13") goes in '
+        "exclude_dates as its own field — never invent a different field name for this, and "
+        "never silently drop it.\n"
         "2) A handful of specific/irregular shifts on different dates — list each one "
         'explicitly: {"intent": "create_schedule", "events": [{"date": "YYYY-MM-DD", '
         '"start_time": "HH:MM", "end_time": "HH:MM", "event_type": one of '
@@ -165,7 +171,7 @@ _EVENT_TYPE_LABELS = {
         "unavailable": "Unavailable",
     },
     "ru": {
-        "working_hours": "Рабочие часы",
+        "working_hours": "Работа",
         "sleep": "Сон",
         "meeting": "Встреча",
         "sport": "Спорт",
@@ -194,10 +200,11 @@ def _expand_pattern(pattern: SchedulePattern) -> list[ScheduleEventItem]:
     """
     start = date.fromisoformat(pattern.date_from)
     end = date.fromisoformat(pattern.date_to)
+    excluded = set(pattern.exclude_dates)
     items: list[ScheduleEventItem] = []
     cursor = start
     while cursor <= end:
-        if cursor.isoweekday() in pattern.weekdays:
+        if cursor.isoweekday() in pattern.weekdays and cursor.isoformat() not in excluded:
             items.append(
                 ScheduleEventItem(
                     date=cursor.isoformat(),

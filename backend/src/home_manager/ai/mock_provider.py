@@ -13,6 +13,7 @@ _PATTERN_PREFIX_RE = re.compile(r"^pattern\s*:\s*", re.IGNORECASE)
 _PATTERN_RE = re.compile(
     r"weekdays=(?P<weekdays>[\d,]+)\s+from=(?P<from>\d{4}-\d{2}-\d{2})\s+"
     r"to=(?P<to>\d{4}-\d{2}-\d{2})\s+(?P<start>\d{2}:\d{2})-(?P<end>\d{2}:\d{2})\s+(?P<type>\w+)"
+    r"(?:\s+exclude=(?P<exclude>[\d,-]+))?"
 )
 
 
@@ -37,6 +38,7 @@ class MockLLMProvider:
             rest = _PATTERN_PREFIX_RE.sub("", text)
             m = _PATTERN_RE.search(rest)
             if m:
+                exclude = m.group("exclude")
                 payload: dict[str, object] = {
                     "intent": "create_schedule",
                     "pattern": {
@@ -47,6 +49,7 @@ class MockLLMProvider:
                         "end_time": m.group("end"),
                         "event_type": m.group("type"),
                         "title": None,
+                        "exclude_dates": exclude.split(",") if exclude else [],
                     },
                 }
             else:

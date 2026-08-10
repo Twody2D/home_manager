@@ -1,3 +1,4 @@
+import re
 import uuid
 from typing import Literal, Self
 
@@ -38,6 +39,13 @@ class SchedulePattern(BaseModel):
     end_time: str = Field(pattern=r"^\d{2}:\d{2}$")
     event_type: CalendarEventType
     title: str | None = Field(default=None, max_length=200)
+    # Individual dates to skip within the range (e.g. "every weekday except
+    # the 12th and 13th"). Without a real field for this, testing showed the
+    # model would invent its own key name for it, which Pydantic silently
+    # drops — the exclusion just vanished and every date got scheduled.
+    exclude_dates: list[str] = Field(
+        default_factory=list, max_length=60, examples=[["2026-08-12", "2026-08-13"]]
+    )
 
     @field_validator("weekdays")
     @classmethod
@@ -45,6 +53,14 @@ class SchedulePattern(BaseModel):
         if any(day < 1 or day > 7 for day in value):
             raise ValueError("weekdays must be ISO weekday numbers 1 (Mon) to 7 (Sun)")
         return sorted(set(value))
+
+    @field_validator("exclude_dates")
+    @classmethod
+    def _validate_exclude_dates(cls, value: list[str]) -> list[str]:
+        date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+        if any(not date_re.match(d) for d in value):
+            raise ValueError("exclude_dates entries must be YYYY-MM-DD")
+        return value
 
 
 class CreateScheduleIntent(BaseModel):
