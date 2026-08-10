@@ -29,8 +29,9 @@ FROM python:3.13-slim AS runtime
 # currently stuck on a version with a known advisory that even the latest
 # pip release hasn't updated; setuptools has its own separate CVE). Since
 # nothing here needs them, remove them outright rather than chase upstream
-# patches for code the app never runs.
-RUN rm -rf /usr/local/lib/python3.13/site-packages/*
+# patches for code the app never runs. Globbed (not hardcoded to 3.13) so
+# this doesn't silently stop working on the next Python version bump.
+RUN rm -rf /usr/local/lib/python3.*/site-packages/*
 
 RUN groupadd --system app && useradd --system --gid app --home-dir /app app
 
