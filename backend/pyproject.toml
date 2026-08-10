@@ -13,7 +13,7 @@ dependencies = [
     "alembic>=1.14",
     "argon2-cffi>=23.1",
     "pyjwt>=2.9",
-    "pydantic[email]>=2.9",
+    "pydantic[email]>=2.13.4",
     "httpx>=0.27",
     "pywebpush>=2.0",
 ]
