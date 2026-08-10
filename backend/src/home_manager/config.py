@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     llm_provider: str = "mock"
     llm_model: str = "gemini-2.0-flash"
     gemini_api_key: str | None = None
+    groq_api_key: str | None = None
+    cloudflare_api_token: str | None = None
+    cloudflare_account_id: str | None = None
 
     # Web push is disabled (subscribe/send become no-ops) unless both keys
     # are set. Generate a pair with: uv run python scripts/generate_vapid_keys.py

@@ -25,7 +25,13 @@ async def send_message(
     session: DbSession,
     provider: Provider,
 ) -> AssistantReply:
-    intent = await service.interpret_message(provider, payload.message)
+    intent = await service.interpret_message(
+        provider, payload.message, client_now=payload.client_now
+    )
     return await service.execute_intent(
-        session, intent=intent, tenant_id=current_user.tenant_id, user_id=current_user.id
+        session,
+        intent=intent,
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        client_now=payload.client_now,
     )

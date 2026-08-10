@@ -1,15 +1,8 @@
 import httpx
-from fastapi import status
 
-from home_manager.core.errors import AppError
+from home_manager.ai.provider import LLMProviderError
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-
-
-class LLMProviderError(AppError):
-    code = "LLM_PROVIDER_ERROR"
-    status_code = status.HTTP_502_BAD_GATEWAY
-    message = "The AI provider failed to respond"
 
 
 class GeminiLLMProvider:

@@ -181,7 +181,7 @@ export const en = {
   },
   assistant: {
     title: "Assistant",
-    hint: 'Try "create task: water the plants, 15 minutes".',
+    hint: 'Try "create task: water the plants, 15 minutes", or describe your schedule — "I work Mon–Fri 9 to 6" or "night shift tomorrow 22:00–06:00".',
     empty: "Ask me to create a task for you.",
     thinking: "Thinking…",
     placeholder: "Message the assistant…",

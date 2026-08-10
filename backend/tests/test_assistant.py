@@ -64,6 +64,97 @@ async def test_unrecognized_message_does_not_create_a_task(
 
 
 @pytest.mark.asyncio
+async def test_schedule_message_creates_calendar_events(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": (
+                "schedule: 2026-08-11 09:00-18:00 working_hours, "
+                "2026-08-12 09:00-18:00 working_hours"
+            ),
+            "client_now": "2026-08-10T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["event_count"] == 2
+    assert body["task_id"] is None
+
+    events_response = await client.get(
+        "/api/v1/calendar/events",
+        params={"ends_after": "2026-08-01T00:00:00Z"},
+        headers=_auth_headers(owner),
+    )
+    events = events_response.json()
+    assert len(events) == 2
+    assert {event["event_type"] for event in events} == {"working_hours"}
+    assert events[0]["start_at"].startswith("2026-08-1")
+
+
+@pytest.mark.asyncio
+async def test_schedule_message_rolls_overnight_shift_to_next_day(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": "schedule: 2026-08-11 22:00-06:00 working_hours",
+            "client_now": "2026-08-10T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["event_count"] == 1
+
+    events_response = await client.get(
+        "/api/v1/calendar/events",
+        params={"ends_after": "2026-08-01T00:00:00Z"},
+        headers=_auth_headers(owner),
+    )
+    event = events_response.json()[0]
+    assert event["start_at"][:10] == "2026-08-11"
+    assert event["end_at"][:10] == "2026-08-12"
+
+
+@pytest.mark.asyncio
+async def test_schedule_message_with_impossible_date_degrades_gracefully(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": "schedule: 2026-02-30 09:00-18:00 working_hours",
+            "client_now": "2026-08-10T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["event_count"] is None
+    assert body["task_id"] is None
+
+    events_response = await client.get(
+        "/api/v1/calendar/events",
+        params={"ends_after": "2026-01-01T00:00:00Z"},
+        headers=_auth_headers(owner),
+    )
+    assert events_response.json() == []
+
+
+@pytest.mark.asyncio
 async def test_empty_message_is_rejected(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:
