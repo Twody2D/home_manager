@@ -7,6 +7,8 @@ import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TasksPage } from "./pages/TasksPage";
+import { CalendarPage } from "./pages/CalendarPage";
+import { PreferencesPage } from "./pages/PreferencesPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,6 +28,8 @@ export default function App() {
               <Route element={<AppShell />}>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/tasks" element={<TasksPage />} />
+                <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/preferences" element={<PreferencesPage />} />
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

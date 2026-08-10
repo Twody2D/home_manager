@@ -9,8 +9,14 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from home_manager.auth import (
     models as auth_models,  # noqa: F401  (registers tables on Base.metadata)
 )
+from home_manager.calendar import (
+    models as calendar_models,  # noqa: F401  (registers tables on Base.metadata)
+)
 from home_manager.config import get_settings
 from home_manager.db.base import Base
+from home_manager.preferences import (
+    models as preferences_models,  # noqa: F401  (registers tables on Base.metadata)
+)
 from home_manager.tasks import (
     models as task_models,  # noqa: F401  (registers tables on Base.metadata)
 )

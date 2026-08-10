@@ -10,8 +10,9 @@ AI-помощник, интеграция с Яндекс Алисой и умн
 - Milestone 1 — repository, Docker, backend skeleton, PostgreSQL, health checks, CI, authentication
 - Milestone 2 — tenant/users/tasks CRUD
 - Milestone 3 — PWA (login, dashboard, tasks, daily view)
+- Milestone 4 — calendar (availability), preferences
 
-Далее — Milestone 4 (calendar, availability, preferences).
+Далее — Milestone 5 (Planning Engine).
 
 ## Архитектура
 
@@ -38,7 +39,7 @@ docker compose exec backend python -m alembic upgrade head
 Полный стек (Postgres + backend + nginx с собранным фронтендом) — на `http://localhost:8080`.
 Backend напрямую (в обход nginx, для отладки API) — на `http://localhost:8000`, эндпоинты под
 `/api/v1/` (`/api/v1/health/live`, `/api/v1/health/ready`, `/api/v1/auth/*`, `/api/v1/tasks`,
-`/api/v1/users`).
+`/api/v1/users`, `/api/v1/calendar/events`, `/api/v1/preferences/me`).
 
 Локальная разработка backend без Docker (Postgres всё равно поднимается контейнером):
 

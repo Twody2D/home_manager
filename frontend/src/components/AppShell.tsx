@@ -30,6 +30,8 @@ export function AppShell() {
         <div className="mx-auto flex max-w-2xl">
           <NavTab to="/" label="Today" />
           <NavTab to="/tasks" label="Tasks" />
+          <NavTab to="/calendar" label="Calendar" />
+          <NavTab to="/preferences" label="Prefs" />
         </div>
       </nav>
     </div>

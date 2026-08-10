@@ -74,3 +74,62 @@ export interface ApiErrorBody {
     request_id: string | null;
   };
 }
+
+export type CalendarEventType =
+  | "working_hours"
+  | "sleep"
+  | "meeting"
+  | "sport"
+  | "trip"
+  | "personal"
+  | "unavailable";
+
+export interface CalendarEvent {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  event_type: CalendarEventType;
+  title: string;
+  description: string | null;
+  start_at: string;
+  end_at: string;
+  all_day: boolean;
+  location: string | null;
+  recurrence: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CalendarEventCreateInput {
+  event_type: CalendarEventType;
+  title: string;
+  description?: string | null;
+  start_at: string;
+  end_at: string;
+  all_day?: boolean;
+  location?: string | null;
+  recurrence?: string | null;
+}
+
+export type CalendarEventUpdateInput = Partial<CalendarEventCreateInput>;
+
+export type EnergyPattern = "morning" | "evening" | "steady";
+
+export interface UserPreferences {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  working_hours_start: string | null;
+  working_hours_end: string | null;
+  sleep_start: string | null;
+  sleep_end: string | null;
+  preferred_categories: string[];
+  disliked_categories: string[];
+  energy_pattern: EnergyPattern;
+  task_speed_multiplier: number;
+  notes: string | null;
+}
+
+export type UserPreferencesUpdateInput = Partial<
+  Omit<UserPreferences, "id" | "tenant_id" | "user_id">
+>;

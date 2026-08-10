@@ -19,6 +19,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 REFRESH_COOKIE_NAME = "refresh_token"
 CSRF_COOKIE_NAME = "csrf_token"
 REFRESH_COOKIE_PATH = "/api/v1/auth"
+# The CSRF cookie must be readable via document.cookie from wherever the SPA
+# runs (any frontend route), so the client can echo it back as the
+# X-CSRF-Token header — unlike the HttpOnly refresh cookie, it can't be
+# scoped down to just the auth endpoints.
+CSRF_COOKIE_PATH = "/"
 
 
 class CsrfTokenMismatchError(AppError):
@@ -52,13 +57,13 @@ def _set_auth_cookies(
         httponly=False,
         secure=secure,
         samesite="strict",
-        path=REFRESH_COOKIE_PATH,
+        path=CSRF_COOKIE_PATH,
     )
 
 
 def _clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(REFRESH_COOKIE_NAME, path=REFRESH_COOKIE_PATH)
-    response.delete_cookie(CSRF_COOKIE_NAME, path=REFRESH_COOKIE_PATH)
+    response.delete_cookie(CSRF_COOKIE_NAME, path=CSRF_COOKIE_PATH)
 
 
 async def _issue_tokens_and_respond(

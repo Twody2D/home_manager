@@ -28,6 +28,23 @@ async def test_register_creates_household_owner(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_csrf_cookie_is_readable_from_any_frontend_route(client: AsyncClient) -> None:
+    """The CSRF cookie must have Path=/ so the SPA can read it via
+    document.cookie from any route (not just /api/v1/auth/*) to echo it back
+    as the X-CSRF-Token header — unlike the HttpOnly refresh cookie, which
+    should stay scoped to the auth endpoints that actually need it.
+    """
+    response = await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+
+    set_cookie_headers = response.headers.get_list("set-cookie")
+    csrf_cookie = next(h for h in set_cookie_headers if h.startswith("csrf_token="))
+    refresh_cookie = next(h for h in set_cookie_headers if h.startswith("refresh_token="))
+
+    assert "Path=/;" in csrf_cookie or csrf_cookie.rstrip().endswith("Path=/")
+    assert "Path=/api/v1/auth" in refresh_cookie
+
+
+@pytest.mark.asyncio
 async def test_register_rejects_duplicate_email(client: AsyncClient) -> None:
     await _register(client)
 

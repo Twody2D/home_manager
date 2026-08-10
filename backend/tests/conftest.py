@@ -17,7 +17,10 @@ async def _clean_database() -> AsyncIterator[None]:
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE TABLE tasks, refresh_tokens, users, tenants RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE TABLE tasks, calendar_events, user_preferences, "
+                "refresh_tokens, users, tenants RESTART IDENTITY CASCADE"
+            )
         )
     login_rate_limiter.reset_all()
     yield
