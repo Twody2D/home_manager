@@ -20,6 +20,24 @@ real deployment (reachable from the internet), put a TLS-terminating reverse pro
 - Set `CORS_ALLOWED_ORIGINS` in `.env` to the real public origin (not
   `http://localhost:5173`).
 
+### Continuous deployment
+
+`.github/workflows/deploy.yml` runs after every successful `CI` run on `main` (via
+`workflow_run`, so it never deploys code that hasn't passed tests/lint/build/security
+scan) and SSHes into the VPS to `git reset --hard origin/main`, rebuild, and restart
+the stack, then run `alembic upgrade head`.
+
+It authenticates with a dedicated deploy keypair (`DEPLOY_SSH_KEY` GitHub secret) that
+is separate from any personal SSH key — its public half is appended to the deploy
+user's `~/.ssh/authorized_keys` on the VPS. `DEPLOY_HOST`/`DEPLOY_USER` are the other
+two required secrets. The deploy user must be in the `docker` group (no `sudo` in the
+script) and must already have the repo checked out at `~/opt/home_manager` with a
+working `.env` and `docker-compose.override.yml` in place — this workflow only ever
+updates code and restarts containers, it never bootstraps a fresh host.
+
+A deploy is a no-op if there's nothing new to build (Docker layer caching) and
+`alembic upgrade head` is idempotent, so re-running it is always safe.
+
 ### Environment variables
 
 See `.env.example` for the full list with defaults. Required with no default:

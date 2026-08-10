@@ -1,10 +1,20 @@
 /// <reference lib="webworker" />
+import { clientsClaim } from "workbox-core";
 import { createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: (string | { revision: string | null; url: string })[];
 };
+
+// registerType: "autoUpdate" only controls the *client-side* registration
+// behavior (no user prompt) — with the injectManifest strategy, the new
+// worker still has to be told to skip the "waiting" phase and take control
+// of already-open tabs itself, or a deployed update silently sits idle until
+// every tab of the app is fully closed. Without this, a live tab keeps
+// running old JS indefinitely after a deploy.
+self.skipWaiting();
+clientsClaim();
 
 // Injected by vite-plugin-pwa's injectManifest build step with the app
 // shell's hashed asset list — this is the offline-install behavior carried
