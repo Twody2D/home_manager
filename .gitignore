@@ -39,3 +39,6 @@ logs/
 
 # --- Database ---
 *.sqlite3
+
+# --- Backups (local pg_dump output, never committed) ---
+/backups/
