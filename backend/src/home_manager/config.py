@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     vapid_private_key: str | None = None
     vapid_subject: str = "mailto:admin@example.com"
 
+    smart_home_provider: str = "mock"
+    home_assistant_url: str | None = None
+    home_assistant_token: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

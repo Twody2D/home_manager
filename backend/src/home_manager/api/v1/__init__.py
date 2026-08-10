@@ -8,6 +8,7 @@ from home_manager.integrations.alice.router import router as alice_router
 from home_manager.notifications.router import router as notifications_router
 from home_manager.planning.router import router as planning_router
 from home_manager.preferences.router import router as preferences_router
+from home_manager.smarthome.router import router as smarthome_router
 from home_manager.tasks.router import router as tasks_router
 from home_manager.users.router import router as users_router
 
@@ -22,3 +23,4 @@ api_router.include_router(planning_router)
 api_router.include_router(assistant_router)
 api_router.include_router(notifications_router)
 api_router.include_router(alice_router)
+api_router.include_router(smarthome_router)

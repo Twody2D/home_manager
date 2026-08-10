@@ -7,6 +7,7 @@ from sqlalchemy import text
 from home_manager.app import create_app
 from home_manager.auth.rate_limit import login_rate_limiter
 from home_manager.db.session import get_engine
+from home_manager.smarthome.factory import get_smart_home_provider
 
 RegisterHousehold = Callable[..., Awaitable[dict]]
 
@@ -23,6 +24,10 @@ async def _clean_database() -> AsyncIterator[None]:
             )
         )
     login_rate_limiter.reset_all()
+    # The mock smart home provider is a process-wide singleton (like a real
+    # hub connection would be) with mutable device state — clear it so
+    # tests don't see devices left on by a previous test.
+    get_smart_home_provider.cache_clear()
     yield
 
 

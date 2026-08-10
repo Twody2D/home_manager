@@ -160,3 +160,13 @@ export interface AssistantReply {
   reply: string;
   task_id: string | null;
 }
+
+export type SmartHomeCommand = "turn_on" | "turn_off" | "toggle";
+
+export interface SmartHomeDevice {
+  entity_id: string;
+  name: string;
+  domain: string;
+  state: string;
+  is_on: boolean;
+}
