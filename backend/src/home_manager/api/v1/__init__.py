@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from home_manager.api.v1.health import router as health_router
+from home_manager.assistant.router import router as assistant_router
 from home_manager.auth.router import router as auth_router
 from home_manager.calendar.router import router as calendar_router
 from home_manager.planning.router import router as planning_router
@@ -16,3 +17,4 @@ api_router.include_router(tasks_router)
 api_router.include_router(calendar_router)
 api_router.include_router(preferences_router)
 api_router.include_router(planning_router)
+api_router.include_router(assistant_router)

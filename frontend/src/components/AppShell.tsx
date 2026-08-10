@@ -31,6 +31,7 @@ export function AppShell() {
           <NavTab to="/" label="Today" />
           <NavTab to="/tasks" label="Tasks" />
           <NavTab to="/calendar" label="Calendar" />
+          <NavTab to="/assistant" label="Assistant" />
           <NavTab to="/preferences" label="Prefs" />
         </div>
       </nav>

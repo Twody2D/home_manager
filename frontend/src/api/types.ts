@@ -155,3 +155,8 @@ export interface DailyPlanResponse {
   scheduled: ScheduledTaskEntry[];
   unscheduled: UnscheduledTaskEntry[];
 }
+
+export interface AssistantReply {
+  reply: string;
+  task_id: string | null;
+}
