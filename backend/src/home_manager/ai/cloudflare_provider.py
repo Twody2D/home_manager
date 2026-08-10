@@ -26,6 +26,11 @@ class CloudflareLLMProvider:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
+            # A full month of shifts (up to the calendar bulk-create limit of
+            # 60 events) easily runs past the API's low default completion
+            # length, truncating the JSON mid-object — seen in testing as a
+            # response cut off at the default 256 tokens.
+            "max_tokens": 4096,
         }
         headers = {"Authorization": f"Bearer {self._api_token}"}
 

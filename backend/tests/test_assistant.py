@@ -44,6 +44,23 @@ async def test_create_task_message_creates_task_for_self(
 
 
 @pytest.mark.asyncio
+async def test_unrecognized_message_replies_in_requested_locale(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={"message": "what's the weather like", "locale": "ru"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "полить цветы" in body["reply"]
+
+
+@pytest.mark.asyncio
 async def test_unrecognized_message_does_not_create_a_task(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

@@ -1,3 +1,4 @@
+import i18n from "../i18n";
 import { apiFetch } from "./client";
 import type { AssistantReply } from "./types";
 
@@ -21,6 +22,6 @@ function clientNowWithOffset(): string {
 export function sendMessage(message: string): Promise<AssistantReply> {
   return apiFetch("/assistant/message", {
     method: "POST",
-    body: { message, client_now: clientNowWithOffset() },
+    body: { message, client_now: clientNowWithOffset(), locale: i18n.language },
   });
 }

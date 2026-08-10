@@ -41,6 +41,10 @@ class AssistantMessageRequest(BaseModel):
     # assistant resolve "tomorrow"/"Monday" and store shift times in the
     # user's actual local time instead of guessing a timezone server-side.
     client_now: str | None = Field(default=None, max_length=40)
+    # The UI's current language ("en"/"ru") — only used to pick which fixed
+    # reply strings execute_intent responds with, unrelated to what language
+    # the user's own message happens to be in.
+    locale: str = Field(default="en", max_length=10)
 
 
 class AssistantReply(BaseModel):

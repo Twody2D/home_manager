@@ -34,4 +34,5 @@ async def send_message(
         tenant_id=current_user.tenant_id,
         user_id=current_user.id,
         client_now=payload.client_now,
+        locale=payload.locale,
     )

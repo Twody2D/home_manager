@@ -113,8 +113,66 @@ async def interpret_message(
     return UnknownIntent(raw_message=message)
 
 
-def _default_schedule_title(event_type: str) -> str:
-    return event_type.replace("_", " ").capitalize()
+# Fixed reply strings execute_intent responds with, keyed by the UI locale
+# the request came in with — separate from whatever language the user's own
+# message happens to be in, which only the LLM ever has to understand.
+_REPLY_TEXT = {
+    "en": {
+        "task_added": 'Added "{title}" to your tasks.',
+        "schedule_proposed": (
+            "Here's what I understood — {count} event(s). Check them and confirm."
+        ),
+        "schedule_parse_error": (
+            "I couldn't quite work out those dates — try rephrasing your schedule."
+        ),
+        "unknown": (
+            "Sorry, I didn't understand that. Try something like "
+            '"create task: water the plants, 15 minutes", or describe your work schedule.'
+        ),
+    },
+    "ru": {
+        "task_added": "Добавил «{title}» в задачи.",
+        "schedule_proposed": ("Вот что получилось — {count} событий. Проверьте и подтвердите."),
+        "schedule_parse_error": (
+            "Не удалось разобрать эти даты — попробуйте переформулировать график."
+        ),
+        "unknown": (
+            "Не понял сообщение. Попробуйте что-то вроде «создай задачу: полить цветы, "
+            "15 минут», или опишите свой рабочий график."
+        ),
+    },
+}
+
+_EVENT_TYPE_LABELS = {
+    "en": {
+        "working_hours": "Working hours",
+        "sleep": "Sleep",
+        "meeting": "Meeting",
+        "sport": "Sport",
+        "trip": "Trip",
+        "personal": "Personal",
+        "unavailable": "Unavailable",
+    },
+    "ru": {
+        "working_hours": "Рабочие часы",
+        "sleep": "Сон",
+        "meeting": "Встреча",
+        "sport": "Спорт",
+        "trip": "Поездка",
+        "personal": "Личное",
+        "unavailable": "Недоступен",
+    },
+}
+
+
+def _reply_text(locale: str, key: str, **kwargs: object) -> str:
+    lang = locale if locale in _REPLY_TEXT else "en"
+    return _REPLY_TEXT[lang][key].format(**kwargs)
+
+
+def _default_schedule_title(event_type: str, locale: str) -> str:
+    lang = locale if locale in _EVENT_TYPE_LABELS else "en"
+    return _EVENT_TYPE_LABELS[lang].get(event_type, event_type.replace("_", " ").capitalize())
 
 
 async def execute_intent(
@@ -124,6 +182,7 @@ async def execute_intent(
     tenant_id: uuid.UUID,
     user_id: uuid.UUID,
     client_now: str | None = None,
+    locale: str = "en",
 ) -> AssistantReply:
     """Runs an already-validated intent through real business logic.
 
@@ -144,7 +203,9 @@ async def execute_intent(
             ),
         )
         await session.commit()
-        return AssistantReply(reply=f'Added "{task.title}" to your tasks.', task_id=task.id)
+        return AssistantReply(
+            reply=_reply_text(locale, "task_added", title=task.title), task_id=task.id
+        )
 
     if isinstance(intent, CreateScheduleIntent):
         _, offset = _parse_client_now(client_now)
@@ -159,7 +220,7 @@ async def execute_intent(
                 items.append(
                     CalendarEventCreate(
                         event_type=item.event_type,
-                        title=item.title or _default_schedule_title(item.event_type),
+                        title=item.title or _default_schedule_title(item.event_type, locale),
                         start_at=f"{item.date}T{item.start_time}:00{offset}",
                         end_at=f"{end_date}T{item.end_time}:00{offset}",
                     )
@@ -169,23 +230,14 @@ async def execute_intent(
             # calendar validity (e.g. "2026-02-30") — a model the LLM
             # returned nonsense for degrades to a normal "didn't understand"
             # reply instead of a 500, same as any other unparseable output.
-            return AssistantReply(
-                reply=("I couldn't quite work out those dates — try rephrasing your schedule."),
-                task_id=None,
-            )
+            return AssistantReply(reply=_reply_text(locale, "schedule_parse_error"), task_id=None)
 
         # Deliberately not persisted here — see AssistantReply.proposed_events.
         # The caller reviews/trims this list and saves it via the normal
         # calendar bulk-create endpoint.
         return AssistantReply(
-            reply=f"Here's what I understood — {len(items)} event(s). Check them and confirm.",
+            reply=_reply_text(locale, "schedule_proposed", count=len(items)),
             proposed_events=items,
         )
 
-    return AssistantReply(
-        reply=(
-            "Sorry, I didn't understand that. Try something like "
-            '"create task: water the plants, 15 minutes", or describe your work schedule.'
-        ),
-        task_id=None,
-    )
+    return AssistantReply(reply=_reply_text(locale, "unknown"), task_id=None)
