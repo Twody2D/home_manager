@@ -29,6 +29,7 @@ services:
     restart: unless-stopped
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      REGISTRATION_OPEN: ${REGISTRATION_OPEN:-true}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
