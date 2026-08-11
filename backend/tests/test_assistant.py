@@ -376,6 +376,57 @@ async def test_schedule_message_treats_24_00_as_midnight_next_day(
 
 
 @pytest.mark.asyncio
+async def test_schedule_message_corrects_ordinal_day_drift(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    # The live model has been observed drifting the day-of-month for a bare
+    # "11-го"/"12-го" reference (e.g. onto the 13th/15th) while keeping
+    # month/year and event order correct — simulate that drift here (mock
+    # returns the 15th/16th) and confirm the ordinal day named in the
+    # message ("11-го"/"12-го") wins.
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": (
+                "schedule: 2026-08-15 11:00-23:00 working_hours 11-го, "
+                "2026-08-16 12:00-24:00 working_hours 12-го"
+            ),
+            "client_now": "2026-08-11T09:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    proposed = response.json()["proposed_events"]
+    dates = sorted(event["start_at"][:10] for event in proposed)
+    assert dates == ["2026-08-11", "2026-08-12"]
+
+
+@pytest.mark.asyncio
+async def test_schedule_message_without_matching_ordinal_days_is_not_corrected(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    # No ordinal-day wording in the message — the model's own dates must be
+    # left alone, not overwritten.
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": "schedule: 2026-08-15 11:00-23:00 working_hours",
+            "client_now": "2026-08-11T09:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    proposed = response.json()["proposed_events"]
+    assert proposed[0]["start_at"][:10] == "2026-08-15"
+
+
+@pytest.mark.asyncio
 async def test_empty_message_is_rejected(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

@@ -1,4 +1,5 @@
 import json
+import re
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
@@ -138,6 +139,35 @@ def _fix_weekend_exclusion(intent: CreateScheduleIntent, message: str) -> None:
         pattern.weekdays = _FULL_WORKWEEK
 
 
+_ORDINAL_DAY_RE = re.compile(r"\b(\d{1,2})-?(?:го|ого|е|ой)\b", re.IGNORECASE)
+
+
+def _fix_ordinal_day_mismatch(intent: CreateScheduleIntent, message: str) -> None:
+    """Cloudflare's small model is unreliable at mapping a bare ordinal day
+    ("11-го", "12-го") to the matching row in the date lookup table — live
+    testing showed it drifting the day-of-month by a few days (e.g. "11-го"
+    became the 13th or the 15th) while keeping the month/year and the
+    relative order between events correct. Only correct this when the
+    message names exactly as many ordinal days, in order, as the model
+    returned events for — that's the one case where we can be confident
+    which day belongs to which event without guessing.
+    """
+    if not intent.events:
+        return
+    matches = _ORDINAL_DAY_RE.findall(message)
+    if len(matches) != len(intent.events):
+        return
+    for day_str, event in zip(matches, intent.events, strict=True):
+        day = int(day_str)
+        if not 1 <= day <= 31:
+            return
+        try:
+            current = date.fromisoformat(event.date)
+            event.date = current.replace(day=day).isoformat()
+        except ValueError:
+            return
+
+
 async def interpret_message(
     provider: LLMProvider, message: str, *, client_now: str | None = None
 ) -> AssistantIntent:
@@ -170,6 +200,7 @@ async def interpret_message(
         except ValidationError:
             return UnknownIntent(raw_message=message)
         _fix_weekend_exclusion(schedule_intent, message)
+        _fix_ordinal_day_mismatch(schedule_intent, message)
         return schedule_intent
 
     return UnknownIntent(raw_message=message)
