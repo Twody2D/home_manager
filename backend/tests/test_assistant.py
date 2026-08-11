@@ -226,6 +226,34 @@ async def test_pattern_message_mentioning_weekend_restores_dropped_friday(
 
 
 @pytest.mark.asyncio
+async def test_pattern_message_mentioning_weekend_restores_full_week_from_narrower_subset(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    # Same bug, worse: seen live returning weekdays=[1,2,3] (Mon-Wed only)
+    # for a "кроме выходных" request — any weekday subset short of the full
+    # Mon-Fri week should be restored, not just the exact [1,2,3,4] case.
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": (
+                "pattern: weekdays=1,2,3 from=2026-08-03 to=2026-08-07 "
+                "09:00-18:00 working_hours кроме выходных"
+            ),
+            "client_now": "2026-08-01T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    proposed = response.json()["proposed_events"]
+    dates = {event["start_at"][:10] for event in proposed}
+    assert len(proposed) == 5
+    assert {"2026-08-06", "2026-08-07"} <= dates
+
+
+@pytest.mark.asyncio
 async def test_pattern_message_without_weekend_mention_is_not_corrected(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

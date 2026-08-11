@@ -106,23 +106,28 @@ def _mentions_weekend_exclusion(message: str) -> bool:
     return any(term in lowered for term in _WEEKEND_TERMS)
 
 
-def _fix_weekend_off_by_one(intent: CreateScheduleIntent, message: str) -> None:
-    """Cloudflare's small model reliably (~80% of the time in testing) treats
-    Friday as part of "выходные"/"weekend" and drops it from the weekdays
-    list — e.g. "каждый день кроме выходных" comes back as [1,2,3,4] instead
-    of [1,2,3,4,5]. Prompt wording alone (an explicit rule plus a worked
-    example) didn't fix this reliably, so it's corrected here instead: only
-    when the user's own message actually talks about the weekend and the
-    model produced exactly the Mon-Thu pattern this bug produces — a
-    deliberate "пн-чт" request is untouched.
+_FULL_WORKWEEK = [1, 2, 3, 4, 5]
+
+
+def _fix_weekend_exclusion(intent: CreateScheduleIntent, message: str) -> None:
+    """Cloudflare's small model is unreliable at "every day except the
+    weekend" — in testing it dropped Friday ([1,2,3,4]), and separately
+    dropped Thursday and Friday too ([1,2,3]), from the same kind of
+    request. Prompt wording alone (an explicit rule plus a worked example)
+    didn't fix this reliably, and patching only the exact [1,2,3,4] case
+    missed the second failure mode — so this corrects the general pattern
+    instead: when the user's own message actually talks about the weekend
+    and the model returned some non-empty subset of weekdays that excludes
+    both weekend days but isn't already the full Mon-Fri week, that's this
+    bug, not a deliberate partial-week request (nobody says "except the
+    weekend" to mean "only Monday to Wednesday").
     """
     pattern = intent.pattern
-    if (
-        pattern is not None
-        and pattern.weekdays == [1, 2, 3, 4]
-        and _mentions_weekend_exclusion(message)
-    ):
-        pattern.weekdays = [1, 2, 3, 4, 5]
+    if pattern is None or not _mentions_weekend_exclusion(message):
+        return
+    weekdays = set(pattern.weekdays)
+    if weekdays and weekdays < set(_FULL_WORKWEEK):
+        pattern.weekdays = _FULL_WORKWEEK
 
 
 async def interpret_message(
@@ -156,7 +161,7 @@ async def interpret_message(
             schedule_intent = CreateScheduleIntent.model_validate(data)
         except ValidationError:
             return UnknownIntent(raw_message=message)
-        _fix_weekend_off_by_one(schedule_intent, message)
+        _fix_weekend_exclusion(schedule_intent, message)
         return schedule_intent
 
     return UnknownIntent(raw_message=message)
