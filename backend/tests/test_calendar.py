@@ -249,6 +249,86 @@ async def test_event_from_other_tenant_returns_404(
 
 
 @pytest.mark.asyncio
+async def test_can_create_event_for_household_partner(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    lena = await _invite_member(client, owner)
+
+    response = await client.post(
+        "/api/v1/calendar/events",
+        json={
+            "event_type": "trip",
+            "title": "Weekend trip",
+            "start_at": "2026-01-05T10:00:00Z",
+            "end_at": "2026-01-05T18:00:00Z",
+            "user_id": lena["id"],
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["user_id"] == lena["id"]
+
+
+@pytest.mark.asyncio
+async def test_bulk_create_can_target_multiple_household_members(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    lena = await _invite_member(client, owner)
+
+    response = await client.post(
+        "/api/v1/calendar/events/bulk",
+        json={
+            "events": [
+                {
+                    "event_type": "trip",
+                    "title": "Weekend trip",
+                    "start_at": "2026-01-05T10:00:00Z",
+                    "end_at": "2026-01-05T18:00:00Z",
+                },
+                {
+                    "event_type": "trip",
+                    "title": "Weekend trip",
+                    "start_at": "2026-01-05T10:00:00Z",
+                    "end_at": "2026-01-05T18:00:00Z",
+                    "user_id": lena["id"],
+                },
+            ]
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 201, response.text
+    owners = {event["user_id"] for event in response.json()}
+    assert owners == {owner["user"]["id"], lena["id"]}
+
+
+@pytest.mark.asyncio
+async def test_cannot_create_event_for_user_outside_household(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    other = await register_household(client, email="stranger@example.com")
+
+    response = await client.post(
+        "/api/v1/calendar/events",
+        json={
+            "event_type": "meeting",
+            "title": "Not your household",
+            "start_at": "2026-01-05T10:00:00Z",
+            "end_at": "2026-01-05T11:00:00Z",
+            "user_id": other["user"]["id"],
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_EVENT_USER"
+
+
+@pytest.mark.asyncio
 async def test_owner_can_delete_own_event(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

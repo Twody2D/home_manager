@@ -1,15 +1,10 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CalendarEventForm } from "../components/CalendarEventForm";
+import { QuickAddEventForm } from "../components/QuickAddEventForm";
 import { CalendarEventCard } from "../components/CalendarEventCard";
 import { BulkScheduleForm } from "../components/BulkScheduleForm";
 import { MonthCalendarGrid } from "../components/MonthCalendarGrid";
-import {
-  useCalendarEvents,
-  useCreateEvent,
-  useCreateEventsBulk,
-  useDeleteEvent,
-} from "../hooks/useCalendar";
+import { useCalendarEvents, useCreateEventsBulk, useDeleteEvent } from "../hooks/useCalendar";
 import { useMembers } from "../hooks/useMembers";
 import { useAuth } from "../auth/useAuth";
 import type { CalendarEvent } from "../api/types";
@@ -60,7 +55,6 @@ export function CalendarPage() {
     starts_before: endExclusive.toISOString(),
   });
   const membersQuery = useMembers();
-  const createEvent = useCreateEvent();
   const createEventsBulk = useCreateEventsBulk();
   const deleteEvent = useDeleteEvent();
 
@@ -133,20 +127,6 @@ export function CalendarPage() {
         )}
       </div>
 
-      <CalendarEventForm
-        isSubmitting={createEvent.isPending}
-        onSubmit={async (input) => {
-          await createEvent.mutateAsync(input);
-        }}
-      />
-
-      <BulkScheduleForm
-        isSubmitting={createEventsBulk.isPending}
-        onSubmit={async (events) => {
-          await createEventsBulk.mutateAsync({ events });
-        }}
-      />
-
       {eventsQuery.isLoading ? (
         <p className="text-sm text-slate-500">{t("calendar.loading")}</p>
       ) : eventsQuery.isError ? (
@@ -181,7 +161,23 @@ export function CalendarPage() {
             ))}
           </ul>
         )}
+
+        <QuickAddEventForm
+          date={selectedDate}
+          partner={partner}
+          isSubmitting={createEventsBulk.isPending}
+          onSubmit={async (events) => {
+            await createEventsBulk.mutateAsync({ events });
+          }}
+        />
       </section>
+
+      <BulkScheduleForm
+        isSubmitting={createEventsBulk.isPending}
+        onSubmit={async (events) => {
+          await createEventsBulk.mutateAsync({ events });
+        }}
+      />
     </div>
   );
 }

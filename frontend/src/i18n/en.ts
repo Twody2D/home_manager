@@ -85,6 +85,9 @@ export const en = {
     newEventPlaceholder: "New event…",
     viewAll: "Everyone",
     viewMine: "Mine",
+    quickAdd: {
+      sharedWith: "Also add for {{name}}",
+    },
     grid: {
       prevMonth: "Previous month",
       nextMonth: "Next month",
@@ -236,7 +239,13 @@ export const en = {
   },
   assistant: {
     title: "Assistant",
-    hint: 'Describe your schedule in words — weekdays, times, and any dates to skip. Examples: "work Mon–Fri 9 to 6 all of August except the 12th and 13th" · "night shift tomorrow 22:00–06:00" · "create task: water the plants, 15 minutes".',
+    hint: "Describe your schedule in words — weekdays, times, and any dates to skip.",
+    hintExamplesTitle: "Examples:",
+    hintExamples: [
+      "work Mon–Fri 9 to 6 all of August except the 12th and 13th",
+      "night shift tomorrow 22:00–06:00",
+      "create task: water the plants, 15 minutes",
+    ],
     empty: "Ask me to create a task for you.",
     thinking: "Thinking…",
     placeholder: "Message the assistant…",

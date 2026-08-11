@@ -109,6 +109,9 @@ export interface CalendarEventCreateInput {
   all_day?: boolean;
   location?: string | null;
   recurrence?: string | null;
+  // Defaults to the creator on the backend. Set to another household
+  // member's id to put the same event on their calendar too.
+  user_id?: string | null;
 }
 
 export type CalendarEventUpdateInput = Partial<CalendarEventCreateInput>;

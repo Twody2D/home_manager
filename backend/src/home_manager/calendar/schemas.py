@@ -16,6 +16,12 @@ class CalendarEventCreate(BaseModel):
     all_day: bool = False
     location: str | None = Field(default=None, max_length=200)
     recurrence: str | None = Field(default=None, max_length=200)
+    # Defaults to the creator. Set to another household member's id to put
+    # the same event on their calendar instead — e.g. one partner adding a
+    # shared plan to both calendars submits it twice, once per user_id.
+    # Validated to be a member of the same household in the service layer,
+    # the same way tasks.assigned_to already is.
+    user_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _validate_window(self) -> Self:

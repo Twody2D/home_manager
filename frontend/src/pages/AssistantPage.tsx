@@ -98,7 +98,17 @@ export function AssistantPage() {
   return (
     <div className="flex h-full flex-col space-y-4">
       <h1 className="text-lg font-semibold text-slate-900">{t("assistant.title")}</h1>
-      <p className="text-xs text-slate-500">{t("assistant.hint")}</p>
+      <div className="space-y-1.5">
+        <p className="text-xs text-slate-500">{t("assistant.hint")}</p>
+        <div className="text-xs text-slate-500">
+          <p className="font-medium text-slate-600">{t("assistant.hintExamplesTitle")}</p>
+          <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
+            {(t("assistant.hintExamples", { returnObjects: true }) as string[]).map((example) => (
+              <li key={example}>{example}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
 
       <div className="space-y-2">
         {history.length === 0 && (

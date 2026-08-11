@@ -27,7 +27,7 @@ async def create_event(
     payload: CalendarEventCreate, current_user: CurrentUser, session: DbSession
 ) -> CalendarEventResponse:
     event = await service.create_event(
-        session, tenant_id=current_user.tenant_id, user_id=current_user.id, payload=payload
+        session, tenant_id=current_user.tenant_id, creator_id=current_user.id, payload=payload
     )
     await session.commit()
     return CalendarEventResponse.model_validate(event)
@@ -40,7 +40,7 @@ async def create_events_bulk(
     payload: CalendarEventBulkCreate, current_user: CurrentUser, session: DbSession
 ) -> list[CalendarEventResponse]:
     events = await service.create_events_bulk(
-        session, tenant_id=current_user.tenant_id, user_id=current_user.id, payload=payload
+        session, tenant_id=current_user.tenant_id, creator_id=current_user.id, payload=payload
     )
     await session.commit()
     return [CalendarEventResponse.model_validate(event) for event in events]

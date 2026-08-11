@@ -6,6 +6,7 @@ from fastapi import status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from home_manager.auth.models import User
 from home_manager.calendar.models import CalendarEvent
 from home_manager.calendar.schemas import (
     CalendarEventBulkCreate,
@@ -33,12 +34,40 @@ class NotEventOwnerError(AppError):
     message = "You can only modify your own calendar events"
 
 
+class InvalidEventUserError(AppError):
+    code = "INVALID_EVENT_USER"
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    message = "user_id must be a member of the same household"
+
+
+async def _resolve_event_user(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    creator_id: uuid.UUID,
+    requested: uuid.UUID | None,
+) -> uuid.UUID:
+    if requested is None:
+        return creator_id
+    target = await session.get(User, requested)
+    if target is None or target.tenant_id != tenant_id:
+        raise InvalidEventUserError()
+    return requested
+
+
 async def create_event(
-    session: AsyncSession, *, tenant_id: uuid.UUID, user_id: uuid.UUID, payload: CalendarEventCreate
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    creator_id: uuid.UUID,
+    payload: CalendarEventCreate,
 ) -> CalendarEvent:
+    target_user_id = await _resolve_event_user(
+        session, tenant_id=tenant_id, creator_id=creator_id, requested=payload.user_id
+    )
     event = CalendarEvent(
         tenant_id=tenant_id,
-        user_id=user_id,
+        user_id=target_user_id,
         event_type=payload.event_type,
         title=payload.title,
         description=payload.description,
@@ -57,13 +86,15 @@ async def create_events_bulk(
     session: AsyncSession,
     *,
     tenant_id: uuid.UUID,
-    user_id: uuid.UUID,
+    creator_id: uuid.UUID,
     payload: CalendarEventBulkCreate,
 ) -> list[CalendarEvent]:
     events = [
         CalendarEvent(
             tenant_id=tenant_id,
-            user_id=user_id,
+            user_id=await _resolve_event_user(
+                session, tenant_id=tenant_id, creator_id=creator_id, requested=item.user_id
+            ),
             event_type=item.event_type,
             title=item.title,
             description=item.description,
