@@ -123,12 +123,11 @@ export interface UserPreferences {
   id: string;
   tenant_id: string;
   user_id: string;
+  workplace: string | null;
   working_hours_start: string | null;
   working_hours_end: string | null;
   sleep_start: string | null;
   sleep_end: string | null;
-  preferred_categories: string[];
-  disliked_categories: string[];
   energy_pattern: EnergyPattern;
   task_speed_multiplier: number;
   notes: string | null;

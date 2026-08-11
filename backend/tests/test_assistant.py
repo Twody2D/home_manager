@@ -117,6 +117,32 @@ async def test_schedule_message_proposes_but_does_not_save_events(
 
 
 @pytest.mark.asyncio
+async def test_schedule_message_uses_saved_workplace_as_default_title(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    await client.patch(
+        "/api/v1/preferences/me",
+        json={"workplace": "Пятёрочка"},
+        headers=_auth_headers(owner),
+    )
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": "schedule: 2026-08-11 09:00-18:00 working_hours",
+            "client_now": "2026-08-10T12:00:00+03:00",
+            "locale": "ru",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    proposed = response.json()["proposed_events"]
+    assert proposed[0]["title"] == "Работа — Пятёрочка"
+
+
+@pytest.mark.asyncio
 async def test_schedule_message_rolls_overnight_shift_to_next_day(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

@@ -23,7 +23,7 @@ async def test_get_preferences_creates_defaults_on_first_access(
     assert body["user_id"] == owner["user"]["id"]
     assert body["energy_pattern"] == "steady"
     assert body["task_speed_multiplier"] == 1.0
-    assert body["preferred_categories"] == []
+    assert body["workplace"] is None
 
 
 @pytest.mark.asyncio
@@ -36,8 +36,7 @@ async def test_update_preferences_persists(
         "/api/v1/preferences/me",
         json={
             "energy_pattern": "morning",
-            "preferred_categories": ["cooking", "gardening"],
-            "disliked_categories": ["laundry"],
+            "workplace": "Пятёрочка",
             "task_speed_multiplier": 0.8,
             "working_hours_start": "09:00:00",
             "working_hours_end": "18:00:00",
@@ -48,7 +47,7 @@ async def test_update_preferences_persists(
     assert response.status_code == 200
     body = response.json()
     assert body["energy_pattern"] == "morning"
-    assert body["preferred_categories"] == ["cooking", "gardening"]
+    assert body["workplace"] == "Пятёрочка"
     assert body["task_speed_multiplier"] == 0.8
     assert body["working_hours_start"] == "09:00:00"
 

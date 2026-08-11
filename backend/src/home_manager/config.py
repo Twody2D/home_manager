@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     environment: str = "development"
+    registration_open: bool = True
 
     database_url: str = "postgresql+asyncpg://home_manager:home_manager@localhost:5432/home_manager"
 

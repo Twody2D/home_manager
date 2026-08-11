@@ -32,6 +32,12 @@ class CsrfTokenMismatchError(AppError):
     message = "CSRF token missing or invalid"
 
 
+class RegistrationClosedError(AppError):
+    code = "REGISTRATION_CLOSED"
+    status_code = status.HTTP_403_FORBIDDEN
+    message = "Registration is currently closed"
+
+
 def _set_auth_cookies(
     response: Response, *, refresh_token: str, refresh_expires_at: datetime, csrf_token: str
 ) -> None:
@@ -92,6 +98,8 @@ async def register(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ) -> TokenResponse:
+    if not get_settings().registration_open:
+        raise RegistrationClosedError()
     user = await service.register_household(
         session,
         household_name=payload.household_name,

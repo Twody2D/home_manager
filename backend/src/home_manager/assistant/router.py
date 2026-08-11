@@ -10,6 +10,7 @@ from home_manager.assistant.schemas import AssistantMessageRequest, AssistantRep
 from home_manager.auth.dependencies import get_current_user
 from home_manager.auth.models import User
 from home_manager.db.session import get_db_session
+from home_manager.preferences import service as preferences_service
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
@@ -28,6 +29,10 @@ async def send_message(
     intent = await service.interpret_message(
         provider, payload.message, client_now=payload.client_now
     )
+    prefs = await preferences_service.get_or_create_preferences(
+        session, tenant_id=current_user.tenant_id, user_id=current_user.id
+    )
+    await session.commit()
     return await service.execute_intent(
         session,
         intent=intent,
@@ -35,4 +40,5 @@ async def send_message(
         user_id=current_user.id,
         client_now=payload.client_now,
         locale=payload.locale,
+        workplace=prefs.workplace,
     )

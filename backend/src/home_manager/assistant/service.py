@@ -187,9 +187,12 @@ def _reply_text(locale: str, key: str, **kwargs: object) -> str:
     return _REPLY_TEXT[lang][key].format(**kwargs)
 
 
-def _default_schedule_title(event_type: str, locale: str) -> str:
+def _default_schedule_title(event_type: str, locale: str, *, workplace: str | None = None) -> str:
     lang = locale if locale in _EVENT_TYPE_LABELS else "en"
-    return _EVENT_TYPE_LABELS[lang].get(event_type, event_type.replace("_", " ").capitalize())
+    label = _EVENT_TYPE_LABELS[lang].get(event_type, event_type.replace("_", " ").capitalize())
+    if event_type == "working_hours" and workplace:
+        return f"{label} — {workplace}"
+    return label
 
 
 def _expand_pattern(pattern: SchedulePattern) -> list[ScheduleEventItem]:
@@ -226,6 +229,7 @@ async def execute_intent(
     user_id: uuid.UUID,
     client_now: str | None = None,
     locale: str = "en",
+    workplace: str | None = None,
 ) -> AssistantReply:
     """Runs an already-validated intent through real business logic.
 
@@ -267,7 +271,8 @@ async def execute_intent(
                 items.append(
                     CalendarEventCreate(
                         event_type=item.event_type,
-                        title=item.title or _default_schedule_title(item.event_type, locale),
+                        title=item.title
+                        or _default_schedule_title(item.event_type, locale, workplace=workplace),
                         start_at=f"{item.date}T{item.start_time}:00{offset}",
                         end_at=f"{end_date}T{item.end_time}:00{offset}",
                     )

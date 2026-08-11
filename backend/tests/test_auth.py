@@ -2,6 +2,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
+from home_manager.config import get_settings
 from home_manager.db.session import get_engine
 
 REGISTER_PAYLOAD = {
@@ -55,6 +56,21 @@ async def test_register_rejects_duplicate_email(client: AsyncClient) -> None:
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "EMAIL_ALREADY_REGISTERED"
+
+
+@pytest.mark.asyncio
+async def test_register_rejects_when_registration_closed(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("REGISTRATION_OPEN", "false")
+    get_settings.cache_clear()
+    try:
+        response = await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "REGISTRATION_CLOSED"
 
 
 @pytest.mark.asyncio

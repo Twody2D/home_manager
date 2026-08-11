@@ -3,12 +3,12 @@ from datetime import datetime, time
 from enum import StrEnum
 
 from sqlalchemy import (
-    JSON,
     CheckConstraint,
     DateTime,
     Enum,
     Float,
     ForeignKey,
+    String,
     Text,
     Time,
     UniqueConstraint,
@@ -48,12 +48,11 @@ class UserPreferences(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    workplace: Mapped[str | None] = mapped_column(String(200), nullable=True)
     working_hours_start: Mapped[time | None] = mapped_column(Time, nullable=True)
     working_hours_end: Mapped[time | None] = mapped_column(Time, nullable=True)
     sleep_start: Mapped[time | None] = mapped_column(Time, nullable=True)
     sleep_end: Mapped[time | None] = mapped_column(Time, nullable=True)
-    preferred_categories: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    disliked_categories: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     energy_pattern: Mapped[EnergyPattern] = mapped_column(
         Enum(EnergyPattern, name="energy_pattern", native_enum=True),
         nullable=False,

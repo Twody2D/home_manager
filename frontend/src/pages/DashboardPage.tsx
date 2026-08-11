@@ -95,12 +95,20 @@ export function DashboardPage() {
     month: "long",
     day: "numeric",
   });
+  const partner = members.find((member) => member.id !== user?.id);
 
   return (
     <div className="space-y-6">
-      <h1 className="text-lg font-semibold text-slate-900">
-        {t("dashboard.title", { date: dateLabel })}
-      </h1>
+      <div>
+        <h1 className="text-lg font-semibold text-slate-900">
+          {t("dashboard.title", { date: dateLabel })}
+        </h1>
+        {partner && (
+          <p className="text-xs text-slate-500">
+            {t("dashboard.household", { name: partner.display_name })}
+          </p>
+        )}
+      </div>
 
       {todayEvents.length > 0 && (
         <Section title={t("dashboard.todaySchedule")}>

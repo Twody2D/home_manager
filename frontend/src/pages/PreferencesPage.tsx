@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useMyPreferences, useUpdateMyPreferences } from "../hooks/usePreferences";
+import { useInviteMember, useMembers } from "../hooks/useMembers";
 import {
   isPushSupported,
   useCurrentPushSubscription,
@@ -10,6 +11,7 @@ import {
   useSendTestNotification,
 } from "../hooks/useNotifications";
 import { useAliceLinkStatus, useIssueAliceToken, useRevokeAliceToken } from "../hooks/useAlice";
+import { useAuth } from "../auth/useAuth";
 import { ApiError } from "../api/client";
 import type { EnergyPattern } from "../api/types";
 
@@ -86,15 +88,115 @@ function NotificationsSection() {
   );
 }
 
-function toCsv(items: string[]): string {
-  return items.join(", ");
-}
+function HouseholdSection() {
+  const { t } = useTranslation();
+  const { user } = useAuth();
+  const membersQuery = useMembers();
+  const inviteMember = useInviteMember();
 
-function fromCsv(value: string): string[] {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [successName, setSuccessName] = useState<string | null>(null);
+
+  const members = membersQuery.data ?? [];
+  const isOwner = user?.role === "owner";
+
+  async function handleInvite(event: FormEvent) {
+    event.preventDefault();
+    setSuccessName(null);
+    const invited = await inviteMember.mutateAsync({ display_name: name, email, password });
+    setSuccessName(invited.display_name);
+    setName("");
+    setEmail("");
+    setPassword("");
+  }
+
+  const inviteError =
+    inviteMember.error instanceof ApiError ? inviteMember.error.message : null;
+
+  return (
+    <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+      <h2 className="text-sm font-semibold text-slate-900">{t("household.title")}</h2>
+
+      <ul className="space-y-1.5">
+        {members.map((member) => (
+          <li
+            key={member.id}
+            className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm"
+          >
+            <span className="text-slate-900">
+              {member.display_name}
+              {member.id === user?.id && (
+                <span className="ml-1.5 text-xs text-slate-500">({t("household.you")})</span>
+              )}
+            </span>
+            <span className="text-xs text-slate-500">
+              {member.role === "owner" ? t("household.owner") : t("household.member")}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {isOwner && (
+        <form onSubmit={handleInvite} className="space-y-2 border-t border-slate-100 pt-3">
+          <p className="text-xs text-slate-500">{t("household.inviteIntro")}</p>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-slate-600">{t("household.inviteName")}</span>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+            />
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-slate-600">{t("household.inviteEmail")}</span>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+            />
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-slate-600">{t("household.invitePassword")}</span>
+            <input
+              type="text"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+            />
+            <span className="mt-1 block text-xs text-slate-400">
+              {t("household.invitePasswordHint")}
+            </span>
+          </label>
+
+          {inviteError && <p className="text-sm text-red-600">{inviteError}</p>}
+          {successName && (
+            <p className="text-sm text-emerald-600">
+              {t("household.inviteSuccess", { name: successName })}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={inviteMember.isPending}
+            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {inviteMember.isPending ? t("household.inviteSubmitting") : t("household.inviteSubmit")}
+          </button>
+        </form>
+      )}
+    </section>
+  );
 }
 
 function AliceSection() {
@@ -158,33 +260,46 @@ function AliceSection() {
   );
 }
 
+function taskSpeedLabel(
+  t: ReturnType<typeof useTranslation>["t"],
+  multiplier: number,
+): string {
+  const percent = Math.round(Math.abs(multiplier - 1) * 100);
+  if (percent < 5) return t("preferences.taskSpeedAverage");
+  return multiplier < 1
+    ? t("preferences.taskSpeedFasterBy", { percent })
+    : t("preferences.taskSpeedSlowerBy", { percent });
+}
+
 export function PreferencesPage() {
   const { t } = useTranslation();
   const prefsQuery = useMyPreferences();
   const updatePrefs = useUpdateMyPreferences();
 
+  const [workplace, setWorkplace] = useState("");
   const [energyPattern, setEnergyPattern] = useState<EnergyPattern>("steady");
-  const [taskSpeed, setTaskSpeed] = useState("1");
+  const [taskSpeed, setTaskSpeed] = useState(1);
+  const [hasFixedWorkingHours, setHasFixedWorkingHours] = useState(false);
   const [workingStart, setWorkingStart] = useState("");
   const [workingEnd, setWorkingEnd] = useState("");
+  const [hasPredictableSleep, setHasPredictableSleep] = useState(false);
   const [sleepStart, setSleepStart] = useState("");
   const [sleepEnd, setSleepEnd] = useState("");
-  const [preferredCategories, setPreferredCategories] = useState("");
-  const [dislikedCategories, setDislikedCategories] = useState("");
   const [notes, setNotes] = useState("");
   const [savedMessage, setSavedMessage] = useState(false);
 
   useEffect(() => {
     const prefs = prefsQuery.data;
     if (!prefs) return;
+    setWorkplace(prefs.workplace ?? "");
     setEnergyPattern(prefs.energy_pattern);
-    setTaskSpeed(String(prefs.task_speed_multiplier));
+    setTaskSpeed(prefs.task_speed_multiplier);
+    setHasFixedWorkingHours(Boolean(prefs.working_hours_start && prefs.working_hours_end));
     setWorkingStart(prefs.working_hours_start ?? "");
     setWorkingEnd(prefs.working_hours_end ?? "");
+    setHasPredictableSleep(Boolean(prefs.sleep_start && prefs.sleep_end));
     setSleepStart(prefs.sleep_start ?? "");
     setSleepEnd(prefs.sleep_end ?? "");
-    setPreferredCategories(toCsv(prefs.preferred_categories));
-    setDislikedCategories(toCsv(prefs.disliked_categories));
     setNotes(prefs.notes ?? "");
   }, [prefsQuery.data]);
 
@@ -192,14 +307,13 @@ export function PreferencesPage() {
     event.preventDefault();
     setSavedMessage(false);
     await updatePrefs.mutateAsync({
+      workplace: workplace.trim() || null,
       energy_pattern: energyPattern,
-      task_speed_multiplier: Number(taskSpeed) || 1,
-      working_hours_start: workingStart || null,
-      working_hours_end: workingEnd || null,
-      sleep_start: sleepStart || null,
-      sleep_end: sleepEnd || null,
-      preferred_categories: fromCsv(preferredCategories),
-      disliked_categories: fromCsv(dislikedCategories),
+      task_speed_multiplier: taskSpeed,
+      working_hours_start: hasFixedWorkingHours && workingStart ? workingStart : null,
+      working_hours_end: hasFixedWorkingHours && workingEnd ? workingEnd : null,
+      sleep_start: hasPredictableSleep && sleepStart ? sleepStart : null,
+      sleep_end: hasPredictableSleep && sleepEnd ? sleepEnd : null,
       notes: notes || null,
     });
     setSavedMessage(true);
@@ -216,45 +330,97 @@ export function PreferencesPage() {
 
       <NotificationsSection />
       <AliceSection />
+      <HouseholdSection />
 
-      <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-        <div className="grid grid-cols-2 gap-3">
-          <label className="text-sm">
-            <span className="mb-1 block text-slate-600">{t("preferences.workingHoursStart")}</span>
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4 rounded-lg border border-slate-200 bg-white p-4"
+      >
+        <h2 className="text-sm font-semibold text-slate-900">{t("preferences.aboutMeTitle")}</h2>
+
+        <label className="block text-sm">
+          <span className="mb-1 block text-slate-600">{t("preferences.workplace")}</span>
+          <input
+            type="text"
+            value={workplace}
+            onChange={(e) => setWorkplace(e.target.value)}
+            placeholder={t("preferences.workplacePlaceholder")}
+            className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+          />
+          <span className="mt-1 block text-xs text-slate-400">{t("preferences.workplaceHint")}</span>
+        </label>
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
-              type="time"
-              value={workingStart}
-              onChange={(e) => setWorkingStart(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+              type="checkbox"
+              checked={hasFixedWorkingHours}
+              onChange={(e) => setHasFixedWorkingHours(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300"
             />
+            {t("preferences.fixedWorkingHours")}
           </label>
-          <label className="text-sm">
-            <span className="mb-1 block text-slate-600">{t("preferences.workingHoursEnd")}</span>
+          {hasFixedWorkingHours && (
+            <div className="grid grid-cols-2 gap-3 pl-6">
+              <label className="text-sm">
+                <span className="mb-1 block text-slate-600">
+                  {t("preferences.workingHoursStart")}
+                </span>
+                <input
+                  type="time"
+                  value={workingStart}
+                  onChange={(e) => setWorkingStart(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-slate-600">
+                  {t("preferences.workingHoursEnd")}
+                </span>
+                <input
+                  type="time"
+                  value={workingEnd}
+                  onChange={(e) => setWorkingEnd(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+                />
+              </label>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
-              type="time"
-              value={workingEnd}
-              onChange={(e) => setWorkingEnd(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+              type="checkbox"
+              checked={hasPredictableSleep}
+              onChange={(e) => setHasPredictableSleep(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300"
             />
+            {t("preferences.predictableSleep")}
           </label>
-          <label className="text-sm">
-            <span className="mb-1 block text-slate-600">{t("preferences.sleepStart")}</span>
-            <input
-              type="time"
-              value={sleepStart}
-              onChange={(e) => setSleepStart(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-2 py-1.5"
-            />
-          </label>
-          <label className="text-sm">
-            <span className="mb-1 block text-slate-600">{t("preferences.sleepEnd")}</span>
-            <input
-              type="time"
-              value={sleepEnd}
-              onChange={(e) => setSleepEnd(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-2 py-1.5"
-            />
-          </label>
+          <p className="pl-6 text-xs text-slate-400">{t("preferences.predictableSleepHint")}</p>
+          {hasPredictableSleep && (
+            <div className="grid grid-cols-2 gap-3 pl-6">
+              <label className="text-sm">
+                <span className="mb-1 block text-slate-600">{t("preferences.sleepStart")}</span>
+                <input
+                  type="time"
+                  value={sleepStart}
+                  onChange={(e) => setSleepStart(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-slate-600">{t("preferences.sleepEnd")}</span>
+                <input
+                  type="time"
+                  value={sleepEnd}
+                  onChange={(e) => setSleepEnd(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+                />
+              </label>
+            </div>
+          )}
         </div>
 
         <label className="block text-sm">
@@ -270,42 +436,20 @@ export function PreferencesPage() {
           </select>
         </label>
 
-        <label className="block text-sm">
-          <span className="mb-1 block text-slate-600">
-            {t("preferences.taskSpeed", { speed: taskSpeed })}
-          </span>
+        <div className="text-sm">
+          <span className="mb-1 block text-slate-600">{t("preferences.taskSpeedTitle")}</span>
           <input
-            type="number"
-            min="0.1"
-            max="5"
+            type="range"
+            min="0.5"
+            max="2"
             step="0.1"
             value={taskSpeed}
-            onChange={(e) => setTaskSpeed(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+            onChange={(e) => setTaskSpeed(Number(e.target.value))}
+            className="w-full"
           />
-        </label>
-
-        <label className="block text-sm">
-          <span className="mb-1 block text-slate-600">{t("preferences.preferredCategories")}</span>
-          <input
-            type="text"
-            value={preferredCategories}
-            onChange={(e) => setPreferredCategories(e.target.value)}
-            placeholder={t("preferences.preferredCategoriesPlaceholder")}
-            className="w-full rounded-md border border-slate-300 px-2 py-1.5"
-          />
-        </label>
-
-        <label className="block text-sm">
-          <span className="mb-1 block text-slate-600">{t("preferences.dislikedCategories")}</span>
-          <input
-            type="text"
-            value={dislikedCategories}
-            onChange={(e) => setDislikedCategories(e.target.value)}
-            placeholder={t("preferences.dislikedCategoriesPlaceholder")}
-            className="w-full rounded-md border border-slate-300 px-2 py-1.5"
-          />
-        </label>
+          <p className="mt-1 text-sm text-slate-700">{taskSpeedLabel(t, taskSpeed)}</p>
+          <span className="mt-1 block text-xs text-slate-400">{t("preferences.taskSpeedHint")}</span>
+        </div>
 
         <label className="block text-sm">
           <span className="mb-1 block text-slate-600">{t("preferences.notes")}</span>
