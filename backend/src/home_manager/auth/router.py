@@ -13,6 +13,8 @@ from home_manager.auth.security import generate_csrf_token
 from home_manager.config import get_settings
 from home_manager.core.errors import AppError
 from home_manager.db.session import get_db_session
+from home_manager.users import service as users_service
+from home_manager.users.schemas import InviteRedeemRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -107,6 +109,27 @@ async def register(
         email=payload.email,
         password=payload.password,
     )
+    return await _issue_tokens_and_respond(
+        session, response, user=user, user_agent=request.headers.get("user-agent")
+    )
+
+
+@router.post("/invites/{token}/redeem", response_model=TokenResponse)
+async def redeem_invite(
+    token: str,
+    payload: InviteRedeemRequest,
+    response: Response,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+) -> TokenResponse:
+    user = await users_service.redeem_invite(
+        session,
+        raw_token=token,
+        email=payload.email,
+        display_name=payload.display_name,
+        password=payload.password,
+    )
+    await session.commit()
     return await _issue_tokens_and_respond(
         session, response, user=user, user_agent=request.headers.get("user-agent")
     )

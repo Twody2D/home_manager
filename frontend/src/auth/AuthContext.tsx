@@ -49,6 +49,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(response.user);
   }
 
+  async function redeemInvite(token: string, input: authApi.RedeemInviteInput): Promise<void> {
+    const response = await authApi.redeemInvite(token, input);
+    setAccessToken(response.access_token);
+    setUser(response.user);
+  }
+
   async function logout(): Promise<void> {
     try {
       await authApi.logout();
@@ -59,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, redeemInvite, logout }}>
       {children}
     </AuthContext.Provider>
   );

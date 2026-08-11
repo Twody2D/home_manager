@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { useMyPreferences, useUpdateMyPreferences } from "../hooks/usePreferences";
-import { useInviteMember, useMembers } from "../hooks/useMembers";
 import {
   isPushSupported,
   useCurrentPushSubscription,
@@ -11,7 +11,6 @@ import {
   useSendTestNotification,
 } from "../hooks/useNotifications";
 import { useAliceLinkStatus, useIssueAliceToken, useRevokeAliceToken } from "../hooks/useAlice";
-import { useAuth } from "../auth/useAuth";
 import { ApiError } from "../api/client";
 import type { EnergyPattern } from "../api/types";
 
@@ -88,117 +87,6 @@ function NotificationsSection() {
   );
 }
 
-function HouseholdSection() {
-  const { t } = useTranslation();
-  const { user } = useAuth();
-  const membersQuery = useMembers();
-  const inviteMember = useInviteMember();
-
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [successName, setSuccessName] = useState<string | null>(null);
-
-  const members = membersQuery.data ?? [];
-  const isOwner = user?.role === "owner";
-
-  async function handleInvite(event: FormEvent) {
-    event.preventDefault();
-    setSuccessName(null);
-    const invited = await inviteMember.mutateAsync({ display_name: name, email, password });
-    setSuccessName(invited.display_name);
-    setName("");
-    setEmail("");
-    setPassword("");
-  }
-
-  const inviteError =
-    inviteMember.error instanceof ApiError ? inviteMember.error.message : null;
-
-  return (
-    <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900">{t("household.title")}</h2>
-
-      <ul className="space-y-1.5">
-        {members.map((member) => (
-          <li
-            key={member.id}
-            className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm"
-          >
-            <span className="text-slate-900">
-              {member.display_name}
-              {member.id === user?.id && (
-                <span className="ml-1.5 text-xs text-slate-500">({t("household.you")})</span>
-              )}
-            </span>
-            <span className="text-xs text-slate-500">
-              {member.role === "owner" ? t("household.owner") : t("household.member")}
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      {isOwner && (
-        <form onSubmit={handleInvite} className="space-y-2 border-t border-slate-100 pt-3">
-          <p className="text-xs text-slate-500">{t("household.inviteIntro")}</p>
-
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-600">{t("household.inviteName")}</span>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-2 py-1.5"
-            />
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-600">{t("household.inviteEmail")}</span>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-2 py-1.5"
-            />
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-600">{t("household.invitePassword")}</span>
-            <input
-              type="text"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-2 py-1.5"
-            />
-            <span className="mt-1 block text-xs text-slate-400">
-              {t("household.invitePasswordHint")}
-            </span>
-          </label>
-
-          {inviteError && <p className="text-sm text-red-600">{inviteError}</p>}
-          {successName && (
-            <p className="text-sm text-emerald-600">
-              {t("household.inviteSuccess", { name: successName })}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={inviteMember.isPending}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {inviteMember.isPending ? t("household.inviteSubmitting") : t("household.inviteSubmit")}
-          </button>
-        </form>
-      )}
-    </section>
-  );
-}
-
 function AliceSection() {
   const { t, i18n } = useTranslation();
   const statusQuery = useAliceLinkStatus();
@@ -260,15 +148,53 @@ function AliceSection() {
   );
 }
 
-function taskSpeedLabel(
-  t: ReturnType<typeof useTranslation>["t"],
-  multiplier: number,
-): string {
-  const percent = Math.round(Math.abs(multiplier - 1) * 100);
-  if (percent < 5) return t("preferences.taskSpeedAverage");
-  return multiplier < 1
-    ? t("preferences.taskSpeedFasterBy", { percent })
-    : t("preferences.taskSpeedSlowerBy", { percent });
+const TASK_SPEED_PRESETS = [
+  { value: 0.75, labelKey: "preferences.taskSpeedFaster" },
+  { value: 1, labelKey: "preferences.taskSpeedNormal" },
+  { value: 1.3, labelKey: "preferences.taskSpeedSlower" },
+] as const;
+
+function nearestTaskSpeedPreset(value: number): number {
+  return TASK_SPEED_PRESETS.reduce<number>(
+    (best, preset) => (Math.abs(preset.value - value) < Math.abs(best - value) ? preset.value : best),
+    TASK_SPEED_PRESETS[0].value,
+  );
+}
+
+interface PreferencesDraft {
+  workplace: string;
+  energyPattern: EnergyPattern;
+  taskSpeed: number;
+  hasFixedWorkingHours: boolean;
+  workingStart: string;
+  workingEnd: string;
+  hasPredictableSleep: boolean;
+  sleepStart: string;
+  sleepEnd: string;
+  notes: string;
+}
+
+const DRAFT_STORAGE_KEY = "home_manager_preferences_draft";
+
+function loadDraft(): PreferencesDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as PreferencesDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(draft: PreferencesDraft): void {
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch {
+    // Best-effort — losing the draft just means falling back to server data.
+  }
+}
+
+function clearDraft(): void {
+  localStorage.removeItem(DRAFT_STORAGE_KEY);
 }
 
 export function PreferencesPage() {
@@ -288,12 +214,31 @@ export function PreferencesPage() {
   const [notes, setNotes] = useState("");
   const [savedMessage, setSavedMessage] = useState(false);
 
+  const hasHydrated = useRef(false);
+
   useEffect(() => {
     const prefs = prefsQuery.data;
     if (!prefs) return;
+    if (!hasHydrated.current) {
+      const draft = loadDraft();
+      hasHydrated.current = true;
+      if (draft) {
+        setWorkplace(draft.workplace);
+        setEnergyPattern(draft.energyPattern);
+        setTaskSpeed(draft.taskSpeed);
+        setHasFixedWorkingHours(draft.hasFixedWorkingHours);
+        setWorkingStart(draft.workingStart);
+        setWorkingEnd(draft.workingEnd);
+        setHasPredictableSleep(draft.hasPredictableSleep);
+        setSleepStart(draft.sleepStart);
+        setSleepEnd(draft.sleepEnd);
+        setNotes(draft.notes);
+        return;
+      }
+    }
     setWorkplace(prefs.workplace ?? "");
     setEnergyPattern(prefs.energy_pattern);
-    setTaskSpeed(prefs.task_speed_multiplier);
+    setTaskSpeed(nearestTaskSpeedPreset(prefs.task_speed_multiplier));
     setHasFixedWorkingHours(Boolean(prefs.working_hours_start && prefs.working_hours_end));
     setWorkingStart(prefs.working_hours_start ?? "");
     setWorkingEnd(prefs.working_hours_end ?? "");
@@ -302,6 +247,35 @@ export function PreferencesPage() {
     setSleepEnd(prefs.sleep_end ?? "");
     setNotes(prefs.notes ?? "");
   }, [prefsQuery.data]);
+
+  // Persist in-progress edits so switching browser tabs (or app routes) and
+  // coming back doesn't lose them — mirrors the assistant page's draft.
+  useEffect(() => {
+    if (!hasHydrated.current) return;
+    saveDraft({
+      workplace,
+      energyPattern,
+      taskSpeed,
+      hasFixedWorkingHours,
+      workingStart,
+      workingEnd,
+      hasPredictableSleep,
+      sleepStart,
+      sleepEnd,
+      notes,
+    });
+  }, [
+    workplace,
+    energyPattern,
+    taskSpeed,
+    hasFixedWorkingHours,
+    workingStart,
+    workingEnd,
+    hasPredictableSleep,
+    sleepStart,
+    sleepEnd,
+    notes,
+  ]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -316,6 +290,7 @@ export function PreferencesPage() {
       sleep_end: hasPredictableSleep && sleepEnd ? sleepEnd : null,
       notes: notes || null,
     });
+    clearDraft();
     setSavedMessage(true);
   }
 
@@ -328,9 +303,15 @@ export function PreferencesPage() {
       <h1 className="text-lg font-semibold text-slate-900">{t("preferences.title")}</h1>
       <p className="text-xs text-slate-500">{t("preferences.subtitle")}</p>
 
+      <Link
+        to="/household"
+        className="block rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-blue-600 hover:bg-slate-50"
+      >
+        {t("preferences.householdLink")}
+      </Link>
+
       <NotificationsSection />
       <AliceSection />
-      <HouseholdSection />
 
       <form
         onSubmit={handleSubmit}
@@ -360,6 +341,7 @@ export function PreferencesPage() {
             />
             {t("preferences.fixedWorkingHours")}
           </label>
+          <p className="pl-6 text-xs text-slate-400">{t("preferences.fixedWorkingHoursHint")}</p>
           {hasFixedWorkingHours && (
             <div className="grid grid-cols-2 gap-3 pl-6">
               <label className="text-sm">
@@ -434,20 +416,27 @@ export function PreferencesPage() {
             <option value="evening">{t("preferences.energyEvening")}</option>
             <option value="steady">{t("preferences.energySteady")}</option>
           </select>
+          <span className="mt-1 block text-xs text-slate-400">{t("preferences.energyPatternHint")}</span>
         </label>
 
         <div className="text-sm">
           <span className="mb-1 block text-slate-600">{t("preferences.taskSpeedTitle")}</span>
-          <input
-            type="range"
-            min="0.5"
-            max="2"
-            step="0.1"
-            value={taskSpeed}
-            onChange={(e) => setTaskSpeed(Number(e.target.value))}
-            className="w-full"
-          />
-          <p className="mt-1 text-sm text-slate-700">{taskSpeedLabel(t, taskSpeed)}</p>
+          <div className="flex gap-2">
+            {TASK_SPEED_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                onClick={() => setTaskSpeed(preset.value)}
+                className={`flex-1 rounded-md border px-2 py-1.5 text-sm font-medium ${
+                  taskSpeed === preset.value
+                    ? "border-blue-600 bg-blue-50 text-blue-700"
+                    : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {t(preset.labelKey)}
+              </button>
+            ))}
+          </div>
           <span className="mt-1 block text-xs text-slate-400">{t("preferences.taskSpeedHint")}</span>
         </div>
 

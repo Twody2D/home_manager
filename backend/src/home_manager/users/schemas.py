@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -20,3 +21,19 @@ class MemberResponse(BaseModel):
     email: EmailStr
     display_name: str
     role: Role
+
+
+class InviteLinkResponse(BaseModel):
+    token: str
+    expires_at: datetime
+
+
+class InvitePreviewResponse(BaseModel):
+    household_name: str
+    expires_at: datetime
+
+
+class InviteRedeemRequest(BaseModel):
+    email: EmailStr
+    display_name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=8, max_length=128)

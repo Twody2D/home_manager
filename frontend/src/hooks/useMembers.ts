@@ -1,6 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as usersApi from "../api/users";
-import type { InviteMemberInput } from "../api/users";
 
 const MEMBERS_KEY = ["members"] as const;
 
@@ -11,12 +10,8 @@ export function useMembers() {
   });
 }
 
-export function useInviteMember() {
-  const queryClient = useQueryClient();
+export function useCreateInviteLink() {
   return useMutation({
-    mutationFn: (input: InviteMemberInput) => usersApi.inviteMember(input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: MEMBERS_KEY });
-    },
+    mutationFn: () => usersApi.createInviteLink(),
   });
 }

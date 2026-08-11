@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { TaskCard } from "../components/TaskCard";
 import { CalendarEventCard } from "../components/CalendarEventCard";
 import { useMembers } from "../hooks/useMembers";
@@ -104,9 +105,9 @@ export function DashboardPage() {
           {t("dashboard.title", { date: dateLabel })}
         </h1>
         {partner && (
-          <p className="text-xs text-slate-500">
+          <Link to="/household" className="text-xs text-slate-500 hover:text-slate-700">
             {t("dashboard.household", { name: partner.display_name })}
-          </p>
+          </Link>
         )}
       </div>
 

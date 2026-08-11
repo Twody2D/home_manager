@@ -165,6 +165,16 @@ export interface AssistantReply {
   proposed_events: CalendarEventCreateInput[] | null;
 }
 
+export interface InviteLink {
+  token: string;
+  expires_at: string;
+}
+
+export interface InvitePreview {
+  household_name: string;
+  expires_at: string;
+}
+
 export type SmartHomeCommand = "turn_on" | "turn_off" | "toggle";
 
 export interface SmartHomeDevice {

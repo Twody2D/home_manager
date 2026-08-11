@@ -7,7 +7,12 @@ from home_manager.auth.dependencies import get_current_user, require_role
 from home_manager.auth.models import Role, User
 from home_manager.db.session import get_db_session
 from home_manager.users import service
-from home_manager.users.schemas import MemberInviteRequest, MemberResponse
+from home_manager.users.schemas import (
+    InviteLinkResponse,
+    InvitePreviewResponse,
+    MemberInviteRequest,
+    MemberResponse,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -38,3 +43,21 @@ async def invite_member(
     )
     await session.commit()
     return MemberResponse.model_validate(member)
+
+
+@router.post("/invites", response_model=InviteLinkResponse, status_code=status.HTTP_201_CREATED)
+async def create_invite_link(
+    current_user: Annotated[User, Depends(require_role(Role.OWNER))],
+    session: DbSession,
+) -> InviteLinkResponse:
+    invite, raw_token = await service.create_invite(
+        session, tenant_id=current_user.tenant_id, created_by=current_user.id
+    )
+    await session.commit()
+    return InviteLinkResponse(token=raw_token, expires_at=invite.expires_at)
+
+
+@router.get("/invites/{token}", response_model=InvitePreviewResponse)
+async def preview_invite_link(token: str, session: DbSession) -> InvitePreviewResponse:
+    invite, tenant_name = await service.preview_invite(session, raw_token=token)
+    return InvitePreviewResponse(household_name=tenant_name, expires_at=invite.expires_at)
