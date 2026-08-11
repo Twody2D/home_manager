@@ -31,6 +31,10 @@ class CloudflareLLMProvider:
             # length, truncating the JSON mid-object — seen in testing as a
             # response cut off at the default 256 tokens.
             "max_tokens": 4096,
+            # We're extracting structured JSON, not generating prose — lowest
+            # temperature makes the model's intent classification and field
+            # extraction far more consistent run-to-run for the same input.
+            "temperature": 0,
         }
         headers = {"Authorization": f"Bearer {self._api_token}"}
 
