@@ -4,6 +4,7 @@ import { TaskForm } from "../components/TaskForm";
 import { TaskCard } from "../components/TaskCard";
 import { useCreateTask, useDeleteTask, useTasks, useUpdateTask } from "../hooks/useTasks";
 import { useMembers } from "../hooks/useMembers";
+import { useAuth } from "../auth/useAuth";
 import type { Task, TaskStatus } from "../api/types";
 
 const FILTERS: { labelKey: string; value: TaskStatus | "all" }[] = [
@@ -12,18 +13,28 @@ const FILTERS: { labelKey: string; value: TaskStatus | "all" }[] = [
   { labelKey: "tasks.filterCompleted", value: "completed" },
 ];
 
+type AssigneeFilter = "all" | "mine" | "partner";
+
 export function TasksPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [filter, setFilter] = useState<TaskStatus | "all">("all");
+  const [assigneeFilter, setAssigneeFilter] = useState<AssigneeFilter>("all");
 
-  const tasksQuery = useTasks(filter === "all" ? {} : { status: filter });
   const membersQuery = useMembers();
+  const members = membersQuery.data ?? [];
+  const membersById = new Map(members.map((member) => [member.id, member]));
+  const partner = members.find((member) => member.id !== user?.id);
+
+  const assignedTo =
+    assigneeFilter === "mine" ? user?.id : assigneeFilter === "partner" ? partner?.id : undefined;
+  const tasksQuery = useTasks({
+    ...(filter === "all" ? {} : { status: filter }),
+    ...(assignedTo ? { assigned_to: assignedTo } : {}),
+  });
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
-
-  const members = membersQuery.data ?? [];
-  const membersById = new Map(members.map((member) => [member.id, member]));
 
   function handleToggleComplete(task: Task) {
     updateTask.mutate({
@@ -57,6 +68,38 @@ export function TasksPage() {
             {t(f.labelKey)}
           </button>
         ))}
+      </div>
+
+      <div className="flex gap-1">
+        <button
+          type="button"
+          onClick={() => setAssigneeFilter("all")}
+          className={`rounded-full px-3 py-1 text-sm font-medium ${
+            assigneeFilter === "all" ? "bg-blue-600 text-white" : "bg-white text-slate-600"
+          }`}
+        >
+          {t("tasks.assigneeAll")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setAssigneeFilter("mine")}
+          className={`rounded-full px-3 py-1 text-sm font-medium ${
+            assigneeFilter === "mine" ? "bg-blue-600 text-white" : "bg-white text-slate-600"
+          }`}
+        >
+          {t("tasks.assigneeMine")}
+        </button>
+        {partner && (
+          <button
+            type="button"
+            onClick={() => setAssigneeFilter("partner")}
+            className={`rounded-full px-3 py-1 text-sm font-medium ${
+              assigneeFilter === "partner" ? "bg-blue-600 text-white" : "bg-white text-slate-600"
+            }`}
+          >
+            {partner.display_name}
+          </button>
+        )}
       </div>
 
       {tasksQuery.isLoading && <p className="text-sm text-slate-500">{t("tasks.loading")}</p>}

@@ -1,9 +1,72 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
-import { useCreateInviteLink, useMembers } from "../hooks/useMembers";
+import { useCreateInviteLink, useHousehold, useMembers, useUpdateHousehold } from "../hooks/useMembers";
+import { householdTitle } from "../lib/householdTitle";
 import type { User } from "../api/types";
+
+function HouseholdNameSection({ isOwner, members }: { isOwner: boolean; members: User[] }) {
+  const { t } = useTranslation();
+  const householdQuery = useHousehold();
+  const updateHousehold = useUpdateHousehold();
+  const [name, setName] = useState("");
+  const [savedMessage, setSavedMessage] = useState(false);
+
+  useEffect(() => {
+    setName(householdQuery.data?.display_name ?? "");
+  }, [householdQuery.data]);
+
+  const autoName = householdTitle(undefined, members);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setSavedMessage(false);
+    await updateHousehold.mutateAsync(name.trim() || null);
+    setSavedMessage(true);
+  }
+
+  if (!isOwner) {
+    return (
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-slate-900">{t("household.nameTitle")}</h2>
+        <p className="mt-1 text-sm text-slate-700">
+          {householdQuery.data?.display_name || autoName}
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-2 rounded-lg border border-slate-200 bg-white p-4"
+    >
+      <h2 className="text-sm font-semibold text-slate-900">{t("household.nameTitle")}</h2>
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={autoName}
+        className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+      />
+      <p className="text-xs text-slate-400">{t("household.nameHint", { auto: autoName })}</p>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={updateHousehold.isPending}
+          className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+        >
+          {t("common.save")}
+        </button>
+        {savedMessage && !updateHousehold.isPending && (
+          <span className="text-sm text-emerald-600">{t("common.saved")}</span>
+        )}
+      </div>
+    </form>
+  );
+}
 
 function MemberCard({ member, isYou, t }: { member: User; isYou: boolean; t: (key: string) => string }) {
   return (
@@ -51,6 +114,8 @@ export function HouseholdPage() {
         <h1 className="text-lg font-semibold text-slate-900">{t("household.title")}</h1>
         <p className="text-xs text-slate-500">{t("household.subtitle")}</p>
       </div>
+
+      <HouseholdNameSection isOwner={isOwner} members={members} />
 
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-slate-500">{t("household.myProfile")}</h2>

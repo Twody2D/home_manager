@@ -1,17 +1,22 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth/useAuth";
+import { useHousehold, useMembers } from "../hooks/useMembers";
+import { householdTitle } from "../lib/householdTitle";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 
 export function AppShell() {
   const { user, logout } = useAuth();
   const { t } = useTranslation();
+  const householdQuery = useHousehold();
+  const membersQuery = useMembers();
+  const title = householdTitle(householdQuery.data, membersQuery.data ?? []);
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
       <header className="border-b border-slate-200 bg-white px-4 py-3">
         <div className="mx-auto flex max-w-2xl items-center justify-between">
-          <span className="text-lg font-semibold text-slate-900">Home Manager</span>
+          <span className="text-lg font-semibold text-slate-900">{title}</span>
           <div className="flex items-center gap-3 text-sm text-slate-600">
             <LanguageSwitcher />
             <span>{user?.display_name}</span>

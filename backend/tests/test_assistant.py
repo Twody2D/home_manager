@@ -197,6 +197,61 @@ async def test_pattern_message_expands_every_matching_weekday(
 
 
 @pytest.mark.asyncio
+async def test_pattern_message_mentioning_weekend_restores_dropped_friday(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    # 2026-08-03 is a Monday. A small model reliably mistakes "выходных" as
+    # including Friday and returns weekdays=[1,2,3,4] — this should be
+    # corrected back to include Friday since the message talks about the
+    # weekend.
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": (
+                "pattern: weekdays=1,2,3,4 from=2026-08-03 to=2026-08-07 "
+                "09:00-18:00 working_hours кроме выходных"
+            ),
+            "client_now": "2026-08-01T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    proposed = response.json()["proposed_events"]
+    dates = {event["start_at"][:10] for event in proposed}
+    assert len(proposed) == 5
+    assert "2026-08-07" in dates
+
+
+@pytest.mark.asyncio
+async def test_pattern_message_without_weekend_mention_is_not_corrected(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    # Same weekdays=[1,2,3,4] as above, but nothing in the message mentions
+    # the weekend — a genuine Mon-Thu request must be left alone.
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": (
+                "pattern: weekdays=1,2,3,4 from=2026-08-03 to=2026-08-07 09:00-18:00 working_hours"
+            ),
+            "client_now": "2026-08-01T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    proposed = response.json()["proposed_events"]
+    dates = {event["start_at"][:10] for event in proposed}
+    assert len(proposed) == 4
+    assert "2026-08-07" not in dates
+
+
+@pytest.mark.asyncio
 async def test_pattern_message_skips_excluded_dates(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

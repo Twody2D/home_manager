@@ -8,6 +8,8 @@ from home_manager.auth.models import Role, User
 from home_manager.db.session import get_db_session
 from home_manager.users import service
 from home_manager.users.schemas import (
+    HouseholdResponse,
+    HouseholdUpdateRequest,
     InviteLinkResponse,
     InvitePreviewResponse,
     MemberInviteRequest,
@@ -61,3 +63,24 @@ async def create_invite_link(
 async def preview_invite_link(token: str, session: DbSession) -> InvitePreviewResponse:
     invite, tenant_name = await service.preview_invite(session, raw_token=token)
     return InvitePreviewResponse(household_name=tenant_name, expires_at=invite.expires_at)
+
+
+@router.get("/household", response_model=HouseholdResponse)
+async def get_household(
+    current_user: Annotated[User, Depends(get_current_user)], session: DbSession
+) -> HouseholdResponse:
+    tenant = await service.get_household(session, tenant_id=current_user.tenant_id)
+    return HouseholdResponse(name=tenant.name, display_name=tenant.display_name)
+
+
+@router.patch("/household", response_model=HouseholdResponse)
+async def update_household(
+    payload: HouseholdUpdateRequest,
+    current_user: Annotated[User, Depends(require_role(Role.OWNER))],
+    session: DbSession,
+) -> HouseholdResponse:
+    tenant = await service.update_household_display_name(
+        session, tenant_id=current_user.tenant_id, display_name=payload.display_name
+    )
+    await session.commit()
+    return HouseholdResponse(name=tenant.name, display_name=tenant.display_name)

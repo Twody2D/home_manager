@@ -79,8 +79,23 @@ async def _get_valid_invite(session: AsyncSession, *, raw_token: str) -> MemberI
 async def preview_invite(session: AsyncSession, *, raw_token: str) -> tuple[MemberInvite, str]:
     invite = await _get_valid_invite(session, raw_token=raw_token)
     tenant = await session.get(Tenant, invite.tenant_id)
-    tenant_name = tenant.name if tenant is not None else ""
+    tenant_name = (tenant.display_name or tenant.name) if tenant is not None else ""
     return invite, tenant_name
+
+
+async def get_household(session: AsyncSession, *, tenant_id: uuid.UUID) -> Tenant:
+    tenant = await session.get(Tenant, tenant_id)
+    assert tenant is not None  # tenant_id always comes from an authenticated user's own token
+    return tenant
+
+
+async def update_household_display_name(
+    session: AsyncSession, *, tenant_id: uuid.UUID, display_name: str | None
+) -> Tenant:
+    tenant = await get_household(session, tenant_id=tenant_id)
+    tenant.display_name = display_name.strip() or None if display_name is not None else None
+    await session.flush()
+    return tenant
 
 
 async def redeem_invite(

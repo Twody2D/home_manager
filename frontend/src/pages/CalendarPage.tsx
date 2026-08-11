@@ -42,6 +42,8 @@ function gridWindow(monthDate: Date): { start: Date; endExclusive: Date } {
   return { start, endExclusive };
 }
 
+type ViewFilter = "all" | "mine" | "partner";
+
 export function CalendarPage() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
@@ -50,6 +52,7 @@ export function CalendarPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDate, setSelectedDate] = useState(() => toDateInputValue(new Date()));
+  const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
 
   const { start, endExclusive } = gridWindow(viewMonth);
   const eventsQuery = useCalendarEvents({
@@ -63,6 +66,7 @@ export function CalendarPage() {
 
   const members = membersQuery.data ?? [];
   const membersById = new Map(members.map((member) => [member.id, member]));
+  const partner = members.find((member) => member.id !== user?.id);
 
   function changeMonth(delta: number) {
     setViewMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
@@ -74,7 +78,12 @@ export function CalendarPage() {
     setSelectedDate(toDateInputValue(now));
   }
 
-  const events = eventsQuery.data ?? [];
+  const allEvents = eventsQuery.data ?? [];
+  const events = allEvents.filter((event: CalendarEvent) => {
+    if (viewFilter === "mine") return event.user_id === user?.id;
+    if (viewFilter === "partner") return partner !== undefined && event.user_id === partner.id;
+    return true;
+  });
   const selectedDayEvents = events
     .filter((event: CalendarEvent) => toDateInputValue(new Date(event.start_at)) === selectedDate)
     .sort((a, b) => a.start_at.localeCompare(b.start_at));
@@ -91,6 +100,38 @@ export function CalendarPage() {
     <div className="space-y-4">
       <h1 className="text-lg font-semibold text-slate-900">{t("calendar.title")}</h1>
       <p className="text-xs text-slate-500">{t("calendar.subtitle")}</p>
+
+      <div className="flex gap-1">
+        <button
+          type="button"
+          onClick={() => setViewFilter("all")}
+          className={`rounded-full px-3 py-1 text-sm font-medium ${
+            viewFilter === "all" ? "bg-blue-600 text-white" : "bg-white text-slate-600"
+          }`}
+        >
+          {t("calendar.viewAll")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewFilter("mine")}
+          className={`rounded-full px-3 py-1 text-sm font-medium ${
+            viewFilter === "mine" ? "bg-blue-600 text-white" : "bg-white text-slate-600"
+          }`}
+        >
+          {t("calendar.viewMine")}
+        </button>
+        {partner && (
+          <button
+            type="button"
+            onClick={() => setViewFilter("partner")}
+            className={`rounded-full px-3 py-1 text-sm font-medium ${
+              viewFilter === "partner" ? "bg-blue-600 text-white" : "bg-white text-slate-600"
+            }`}
+          >
+            {partner.display_name}
+          </button>
+        )}
+      </div>
 
       <CalendarEventForm
         isSubmitting={createEvent.isPending}

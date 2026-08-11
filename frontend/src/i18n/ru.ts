@@ -57,6 +57,8 @@ export const ru: typeof en = {
     filterAll: "Все",
     filterPending: "Активные",
     filterCompleted: "Выполненные",
+    assigneeAll: "Общие",
+    assigneeMine: "Мои",
     loading: "Загружаем задачи…",
     error: "Не удалось загрузить задачи.",
     empty: "Здесь пока нет задач.",
@@ -83,6 +85,8 @@ export const ru: typeof en = {
     error: "Не удалось загрузить календарь.",
     empty: "Нет предстоящих событий у семьи.",
     newEventPlaceholder: "Новое событие…",
+    viewAll: "Общие",
+    viewMine: "Мои",
     grid: {
       prevMonth: "Предыдущий месяц",
       nextMonth: "Следующий месяц",
@@ -179,6 +183,8 @@ export const ru: typeof en = {
   household: {
     title: "Семья",
     subtitle: "Все, кто пользуется этим домом.",
+    nameTitle: "Название семьи",
+    nameHint: "Отображается в шапке приложения вместо «Home Manager». Оставьте пустым, чтобы использовать «{{auto}}».",
     you: "Вы",
     owner: "Владелец",
     member: "Участник",

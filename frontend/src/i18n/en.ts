@@ -55,6 +55,8 @@ export const en = {
     filterAll: "All",
     filterPending: "Pending",
     filterCompleted: "Completed",
+    assigneeAll: "Everyone",
+    assigneeMine: "Mine",
     loading: "Loading tasks…",
     error: "Failed to load tasks.",
     empty: "No tasks here yet.",
@@ -81,6 +83,8 @@ export const en = {
     error: "Failed to load calendar.",
     empty: "No upcoming events for the household.",
     newEventPlaceholder: "New event…",
+    viewAll: "Everyone",
+    viewMine: "Mine",
     grid: {
       prevMonth: "Previous month",
       nextMonth: "Next month",
@@ -177,6 +181,8 @@ export const en = {
   household: {
     title: "Household",
     subtitle: "Everyone sharing this household.",
+    nameTitle: "Household name",
+    nameHint: 'Shown at the top of the app instead of "Home Manager". Leave empty to use "{{auto}}".',
     you: "You",
     owner: "Owner",
     member: "Member",

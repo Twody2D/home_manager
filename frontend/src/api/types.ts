@@ -170,6 +170,11 @@ export interface InviteLink {
   expires_at: string;
 }
 
+export interface Household {
+  name: string;
+  display_name: string | null;
+}
+
 export interface InvitePreview {
   household_name: string;
   expires_at: string;

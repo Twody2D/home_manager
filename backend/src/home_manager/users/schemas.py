@@ -37,3 +37,12 @@ class InviteRedeemRequest(BaseModel):
     email: EmailStr
     display_name: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=8, max_length=128)
+
+
+class HouseholdResponse(BaseModel):
+    name: str
+    display_name: str | None
+
+
+class HouseholdUpdateRequest(BaseModel):
+    display_name: str | None = Field(default=None, max_length=200)

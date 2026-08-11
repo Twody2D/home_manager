@@ -255,3 +255,86 @@ async def test_invite_link_cannot_be_redeemed_twice(
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "INVALID_INVITE"
+
+
+@pytest.mark.asyncio
+async def test_get_household_defaults_to_no_display_name(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.get("/api/v1/users/household", headers=_auth_headers(owner))
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["name"] == "Test Household"
+    assert body["display_name"] is None
+
+
+@pytest.mark.asyncio
+async def test_owner_can_rename_household(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.patch(
+        "/api/v1/users/household",
+        json={"display_name": "Бобровы"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["display_name"] == "Бобровы"
+
+    refetched = await client.get("/api/v1/users/household", headers=_auth_headers(owner))
+    assert refetched.json()["display_name"] == "Бобровы"
+
+
+@pytest.mark.asyncio
+async def test_owner_can_reset_household_name_to_default(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    await client.patch(
+        "/api/v1/users/household",
+        json={"display_name": "Бобровы"},
+        headers=_auth_headers(owner),
+    )
+
+    response = await client.patch(
+        "/api/v1/users/household",
+        json={"display_name": ""},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["display_name"] is None
+
+
+@pytest.mark.asyncio
+async def test_member_cannot_rename_household(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    await client.post(
+        "/api/v1/users",
+        json={
+            "email": "lena@example.com",
+            "display_name": "Lena",
+            "password": "correct-horse-battery-staple",
+        },
+        headers=_auth_headers(owner),
+    )
+    login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "lena@example.com", "password": "correct-horse-battery-staple"},
+    )
+    lena = login_response.json()
+
+    response = await client.patch(
+        "/api/v1/users/household",
+        json={"display_name": "Бобровы"},
+        headers=_auth_headers(lena),
+    )
+
+    assert response.status_code == 403
