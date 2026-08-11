@@ -89,11 +89,19 @@ def _build_system_prompt(now: datetime) -> str:
         'Any date the user excludes ("except the 12th and 13th", "кроме 12 и 13") goes in '
         "exclude_dates as its own field — never invent a different field name for this, and "
         "never silently drop it.\n"
-        "2) A handful of specific/irregular shifts on different dates — list each one "
+        "2) A handful of specific/irregular shifts on different dates (different times on "
+        "each date, or only a couple of one-off dates named directly) — list each one "
         'explicitly: {"intent": "create_schedule", "events": [{"date": "YYYY-MM-DD", '
         '"start_time": "HH:MM", "end_time": "HH:MM", "event_type": one of '
         '"working_hours"/"sleep"/"meeting"/"sport"/"trip"/"personal"/"unavailable", '
-        '"title": "..." or null}]}\n'
+        '"title": "..." or null}]}. Example — "работаю 11-го с 11 до 23, 12-го с 12 до 24" '
+        "(different start/end times on each date, so this is shape 2, not a weekday pattern) "
+        'means: {"intent": "create_schedule", "events": [{"date": "<the 11th, from the table '
+        'above>", "start_time": "11:00", "end_time": "23:00", "event_type": "working_hours", '
+        '"title": null}, {"date": "<the 12th, from the table above>", "start_time": "12:00", '
+        '"end_time": "00:00", "event_type": "working_hours", "title": null}]}. Clock times only '
+        'go up to "23:59" — midnight/end of day ("до 24", "до полуночи", "until midnight") is '
+        'always written as end_time "00:00", never "24:00".\n'
         'Otherwise: {"intent": "unknown", "raw_message": "<the original message>"}'
     )
 
@@ -301,9 +309,14 @@ async def execute_intent(
             items: list[CalendarEventCreate] = []
             for item in schedule_items:
                 end_date = item.date
+                # "24:00" isn't a real clock time, but the prompt only asks
+                # the model not to emit it — it isn't rejected by the schema
+                # (the field is just a digit-shape regex), so normalize it
+                # here too in case a model emits it anyway.
+                end_time = "00:00" if item.end_time == "24:00" else item.end_time
                 # Overnight shift: end time doesn't come after start time on
                 # the same day, so it must roll into the next calendar day.
-                if item.end_time <= item.start_time:
+                if end_time <= item.start_time:
                     end_date = (date.fromisoformat(item.date) + timedelta(days=1)).isoformat()
                 items.append(
                     CalendarEventCreate(
@@ -311,7 +324,7 @@ async def execute_intent(
                         title=item.title
                         or _default_schedule_title(item.event_type, locale, workplace=workplace),
                         start_at=f"{item.date}T{item.start_time}:00{offset}",
-                        end_at=f"{end_date}T{item.end_time}:00{offset}",
+                        end_at=f"{end_date}T{end_time}:00{offset}",
                     )
                 )
         except (ValidationError, ValueError):

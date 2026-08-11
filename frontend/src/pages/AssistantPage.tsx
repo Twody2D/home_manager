@@ -162,13 +162,25 @@ export function AssistantPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
-          type="text"
-          value={message}
-          onChange={(e) => updateMessage(e.target.value)}
-          placeholder={t("assistant.placeholder")}
-          className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-        />
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={message}
+            onChange={(e) => updateMessage(e.target.value)}
+            placeholder={t("assistant.placeholder")}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 pr-8 text-sm focus:border-blue-500 focus:outline-none"
+          />
+          {message && (
+            <button
+              type="button"
+              aria-label={t("assistant.clear")}
+              onClick={() => updateMessage("")}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600"
+            >
+              ×
+            </button>
+          )}
+        </div>
         <button
           type="submit"
           disabled={sendMessage.isPending || !message.trim()}

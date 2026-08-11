@@ -240,6 +240,7 @@ export const en = {
     empty: "Ask me to create a task for you.",
     thinking: "Thinking…",
     placeholder: "Message the assistant…",
+    clear: "Clear message",
     send: "Send",
     error: "Something went wrong reaching the assistant. Please try again.",
     confirmSchedule: "Add to calendar ({{count}})",

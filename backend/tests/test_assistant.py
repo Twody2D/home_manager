@@ -351,6 +351,31 @@ async def test_schedule_message_with_impossible_date_degrades_gracefully(
 
 
 @pytest.mark.asyncio
+async def test_schedule_message_treats_24_00_as_midnight_next_day(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    # A model may emit "24:00" for "until midnight" even though the prompt
+    # tells it to use "00:00" — this should still land on the next day.
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": "schedule: 2026-08-12 12:00-24:00 working_hours",
+            "client_now": "2026-08-10T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    proposed = response.json()["proposed_events"]
+    assert len(proposed) == 1
+    assert proposed[0]["start_at"][:10] == "2026-08-12"
+    assert proposed[0]["end_at"][:10] == "2026-08-13"
+    assert proposed[0]["end_at"][11:16] == "00:00"
+
+
+@pytest.mark.asyncio
 async def test_empty_message_is_rejected(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:
