@@ -185,9 +185,7 @@ async def test_invite_link_preview_shows_household_name(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:
     owner = await register_household(client)
-    invite = (
-        await client.post("/api/v1/users/invites", headers=_auth_headers(owner))
-    ).json()
+    invite = (await client.post("/api/v1/users/invites", headers=_auth_headers(owner))).json()
 
     response = await client.get(f"/api/v1/users/invites/{invite['token']}")
 
@@ -208,9 +206,7 @@ async def test_redeeming_invite_link_creates_member_and_logs_in(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:
     owner = await register_household(client)
-    invite = (
-        await client.post("/api/v1/users/invites", headers=_auth_headers(owner))
-    ).json()
+    invite = (await client.post("/api/v1/users/invites", headers=_auth_headers(owner))).json()
 
     response = await client.post(
         f"/api/v1/auth/invites/{invite['token']}/redeem",
@@ -238,9 +234,7 @@ async def test_invite_link_cannot_be_redeemed_twice(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:
     owner = await register_household(client)
-    invite = (
-        await client.post("/api/v1/users/invites", headers=_auth_headers(owner))
-    ).json()
+    invite = (await client.post("/api/v1/users/invites", headers=_auth_headers(owner))).json()
     await client.post(
         f"/api/v1/auth/invites/{invite['token']}/redeem",
         json={

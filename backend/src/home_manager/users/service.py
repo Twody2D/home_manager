@@ -71,11 +71,7 @@ async def _get_valid_invite(session: AsyncSession, *, raw_token: str) -> MemberI
     invite = await session.scalar(
         select(MemberInvite).where(MemberInvite.token_hash == hash_invite_token(raw_token))
     )
-    if (
-        invite is None
-        or invite.used_at is not None
-        or invite.expires_at < datetime.now(UTC)
-    ):
+    if invite is None or invite.used_at is not None or invite.expires_at < datetime.now(UTC):
         raise InvalidInviteError()
     return invite
 
