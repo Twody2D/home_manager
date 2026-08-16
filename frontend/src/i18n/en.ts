@@ -321,6 +321,13 @@ export const en = {
       inactiveBadge: "Inactive",
       yearlyBadge: "yearly",
     },
+    recurring: {
+      title: "Recurring expenses",
+      empty: "No recurring expenses yet.",
+      nameLabel: "Name",
+      namePlaceholder: "e.g. Rent, Electricity",
+      add: "Add recurring expense",
+    },
   },
   devices: {
     title: "Devices",

@@ -311,6 +311,43 @@ async def test_list_subscriptions_active_only_filters_inactive(
 
 
 @pytest.mark.asyncio
+async def test_subscription_defaults_kind_to_subscription(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/finance/subscriptions",
+        json={"name": "Netflix", "amount": "15.99", "payment_day": 15},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["kind"] == "subscription"
+
+
+@pytest.mark.asyncio
+async def test_create_recurring_expense(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/finance/subscriptions",
+        json={
+            "name": "Rent",
+            "amount": "1200.00",
+            "payment_day": 1,
+            "kind": "recurring_expense",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["kind"] == "recurring_expense"
+
+
+@pytest.mark.asyncio
 async def test_create_yearly_subscription_requires_payment_month(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

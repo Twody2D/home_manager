@@ -323,6 +323,13 @@ export const ru: typeof en = {
       inactiveBadge: "Отключена",
       yearlyBadge: "раз в год",
     },
+    recurring: {
+      title: "Регулярные расходы",
+      empty: "Регулярных расходов пока нет.",
+      nameLabel: "Название",
+      namePlaceholder: "например, Аренда, Электричество",
+      add: "Добавить расход",
+    },
   },
   devices: {
     title: "Устройства",

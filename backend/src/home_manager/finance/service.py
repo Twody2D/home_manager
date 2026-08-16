@@ -170,6 +170,7 @@ async def create_subscription(
         created_by=creator_id,
         name=payload.name,
         amount=payload.amount,
+        kind=payload.kind,
         cadence=payload.cadence,
         payment_day=payload.payment_day,
         payment_month=payload.payment_month,

@@ -14,7 +14,7 @@ import {
 } from "../hooks/useFinance";
 import { formatMoney } from "../lib/money";
 import { SCOPE_BORDER_STYLES, scopeForOwner } from "../lib/personScope";
-import type { Income, Subscription, SubscriptionCadence, User } from "../api/types";
+import type { Income, Subscription, SubscriptionCadence, SubscriptionKind, User } from "../api/types";
 
 function sumAmounts(items: { amount: string }[]): number {
   return items.reduce((total, item) => total + Number(item.amount), 0);
@@ -208,21 +208,25 @@ function SubscriptionFields({
   draft,
   onChange,
   members,
+  nameLabel,
+  namePlaceholder,
 }: {
   draft: SubscriptionDraft;
   onChange: (draft: SubscriptionDraft) => void;
   members: User[];
+  nameLabel: string;
+  namePlaceholder: string;
 }) {
   const { t } = useTranslation();
   return (
     <>
       <label className="col-span-2 block text-sm">
-        <FieldLabel>{t("finance.subscriptions.nameLabel")}</FieldLabel>
+        <FieldLabel>{nameLabel}</FieldLabel>
         <input
           type="text"
           value={draft.name}
           onChange={(e) => onChange({ ...draft, name: e.target.value })}
-          placeholder={t("finance.subscriptions.namePlaceholder")}
+          placeholder={namePlaceholder}
           className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
         />
       </label>
@@ -295,7 +299,21 @@ function SubscriptionFields({
   );
 }
 
-function SubscriptionSection() {
+function SubscriptionSection({
+  kind,
+  title,
+  emptyText,
+  nameLabel,
+  namePlaceholder,
+  addLabel,
+}: {
+  kind: SubscriptionKind;
+  title: string;
+  emptyText: string;
+  nameLabel: string;
+  namePlaceholder: string;
+  addLabel: string;
+}) {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const membersQuery = useMembers();
@@ -307,7 +325,7 @@ function SubscriptionSection() {
   const members = membersQuery.data ?? [];
   const membersById = new Map(members.map((member) => [member.id, member]));
   const partner = members.find((member) => member.id !== user?.id);
-  const subscriptions = subscriptionsQuery.data?.items ?? [];
+  const subscriptions = (subscriptionsQuery.data?.items ?? []).filter((s) => s.kind === kind);
   const activeSubscriptions = subscriptions.filter((s: Subscription) => s.active);
 
   const [draft, setDraft] = useState<SubscriptionDraft>(emptySubscriptionDraft());
@@ -318,6 +336,7 @@ function SubscriptionSection() {
     return {
       name: d.name.trim(),
       amount: d.amount,
+      kind,
       cadence: d.cadence,
       payment_day: Number(d.paymentDay),
       payment_month: d.cadence === "yearly" ? Number(d.paymentMonth) : null,
@@ -347,14 +366,14 @@ function SubscriptionSection() {
   return (
     <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-900">{t("finance.subscriptions.title")}</h2>
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
         <span className="text-sm font-medium text-emerald-600">
           {formatMoney(sumMonthlyEquivalent(activeSubscriptions), i18n.language)}
         </span>
       </div>
 
       {subscriptions.length === 0 ? (
-        <p className="text-sm text-slate-400">{t("finance.subscriptions.empty")}</p>
+        <p className="text-sm text-slate-400">{emptyText}</p>
       ) : (
         <ul className="space-y-1.5">
           {subscriptions.map((subscription: Subscription) => {
@@ -365,7 +384,13 @@ function SubscriptionSection() {
                     onSubmit={(e) => void handleEditSubmit(e)}
                     className="grid grid-cols-2 gap-2"
                   >
-                    <SubscriptionFields draft={editDraft} onChange={setEditDraft} members={members} />
+                    <SubscriptionFields
+                      draft={editDraft}
+                      onChange={setEditDraft}
+                      members={members}
+                      nameLabel={nameLabel}
+                      namePlaceholder={namePlaceholder}
+                    />
                     <div className="col-span-2 flex gap-2">
                       <button
                         type="submit"
@@ -466,15 +491,19 @@ function SubscriptionSection() {
         onSubmit={(e) => void handleSubmit(e)}
         className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3"
       >
-        <SubscriptionFields draft={draft} onChange={setDraft} members={members} />
+        <SubscriptionFields
+          draft={draft}
+          onChange={setDraft}
+          members={members}
+          nameLabel={nameLabel}
+          namePlaceholder={namePlaceholder}
+        />
         <button
           type="submit"
           disabled={createSubscription.isPending || !draft.name.trim() || !draft.amount}
           className="col-span-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
         >
-          {createSubscription.isPending
-            ? t("finance.subscriptions.adding")
-            : t("finance.subscriptions.add")}
+          {createSubscription.isPending ? t("finance.subscriptions.adding") : addLabel}
         </button>
       </form>
     </section>
@@ -492,7 +521,22 @@ export function FinancePage() {
       </div>
 
       <IncomeSection />
-      <SubscriptionSection />
+      <SubscriptionSection
+        kind="subscription"
+        title={t("finance.subscriptions.title")}
+        emptyText={t("finance.subscriptions.empty")}
+        nameLabel={t("finance.subscriptions.nameLabel")}
+        namePlaceholder={t("finance.subscriptions.namePlaceholder")}
+        addLabel={t("finance.subscriptions.add")}
+      />
+      <SubscriptionSection
+        kind="recurring_expense"
+        title={t("finance.recurring.title")}
+        emptyText={t("finance.recurring.empty")}
+        nameLabel={t("finance.recurring.nameLabel")}
+        namePlaceholder={t("finance.recurring.namePlaceholder")}
+        addLabel={t("finance.recurring.add")}
+      />
     </div>
   );
 }

@@ -26,6 +26,14 @@ class SubscriptionCadence(StrEnum):
     YEARLY = "yearly"
 
 
+class SubscriptionKind(StrEnum):
+    # A named service (Netflix, Spotify) — usually tied to one person.
+    SUBSCRIPTION = "subscription"
+    # A recurring household bill (rent, utilities) — conceptually distinct
+    # for users even though it's stored the same way (name/amount/cadence).
+    RECURRING_EXPENSE = "recurring_expense"
+
+
 class Income(Base):
     """A household member's recurring monthly income (e.g. salary).
 
@@ -99,6 +107,11 @@ class Subscription(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    kind: Mapped[SubscriptionKind] = mapped_column(
+        Enum(SubscriptionKind, name="finance_subscription_kind", native_enum=True),
+        nullable=False,
+        default=SubscriptionKind.SUBSCRIPTION,
+    )
     cadence: Mapped[SubscriptionCadence] = mapped_column(
         Enum(SubscriptionCadence, name="finance_subscription_cadence", native_enum=True),
         nullable=False,

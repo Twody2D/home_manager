@@ -5,7 +5,7 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from home_manager.finance.models import SubscriptionCadence
+from home_manager.finance.models import SubscriptionCadence, SubscriptionKind
 
 
 class IncomeCreate(BaseModel):
@@ -45,6 +45,7 @@ class IncomeListResponse(BaseModel):
 class SubscriptionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     amount: Decimal = Field(gt=0)
+    kind: SubscriptionKind = SubscriptionKind.SUBSCRIPTION
     cadence: SubscriptionCadence = SubscriptionCadence.MONTHLY
     payment_day: int = Field(ge=1, le=31)
     payment_month: int | None = Field(default=None, ge=1, le=12)
@@ -62,6 +63,7 @@ class SubscriptionCreate(BaseModel):
 class SubscriptionUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     amount: Decimal | None = Field(default=None, gt=0)
+    kind: SubscriptionKind | None = None
     cadence: SubscriptionCadence | None = None
     payment_day: int | None = Field(default=None, ge=1, le=31)
     payment_month: int | None = Field(default=None, ge=1, le=12)
@@ -76,6 +78,7 @@ class SubscriptionResponse(BaseModel):
     tenant_id: uuid.UUID
     name: str
     amount: Decimal
+    kind: SubscriptionKind
     cadence: SubscriptionCadence
     payment_day: int
     payment_month: int | None

@@ -211,12 +211,14 @@ export interface IncomeListResponse {
 }
 
 export type SubscriptionCadence = "monthly" | "yearly";
+export type SubscriptionKind = "subscription" | "recurring_expense";
 
 export interface Subscription {
   id: string;
   tenant_id: string;
   name: string;
   amount: string;
+  kind: SubscriptionKind;
   cadence: SubscriptionCadence;
   payment_day: number;
   payment_month: number | null;
@@ -230,6 +232,7 @@ export interface Subscription {
 export interface SubscriptionCreateInput {
   name: string;
   amount: string;
+  kind?: SubscriptionKind;
   cadence?: SubscriptionCadence;
   payment_day: number;
   payment_month?: number | null;
