@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { SCOPE_DOT_STYLES, scopeEvents } from "../lib/calendarScope";
-import type { CalendarEvent, User } from "../api/types";
+import { PAYMENT_DOT_STYLE, subscriptionsDueOn } from "../lib/subscriptionCalendar";
+import type { CalendarEvent, Subscription, User } from "../api/types";
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 const MAX_CHIPS_PER_DAY = 3;
@@ -25,6 +26,7 @@ interface MonthCalendarGridProps {
   monthDate: Date;
   events: CalendarEvent[];
   members: User[];
+  subscriptions: Subscription[];
   selectedDate: string;
   onSelectDate: (date: string) => void;
   onPrevMonth: () => void;
@@ -37,6 +39,7 @@ export function MonthCalendarGrid({
   monthDate,
   events,
   members,
+  subscriptions,
   selectedDate,
   onSelectDate,
   onPrevMonth,
@@ -122,6 +125,7 @@ export function MonthCalendarGrid({
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-md bg-slate-100">
         {cells.map((cell) => {
           const dayEvents = eventsByDate.get(cell.date) ?? [];
+          const duePayments = subscriptionsDueOn(subscriptions, cell.date);
           const isSelected = isSameDate(cell.date, selectedDate);
           const isToday = cell.date === todayStr;
           return (
@@ -153,6 +157,9 @@ export function MonthCalendarGrid({
                   <span className="text-[9px] leading-none text-slate-400">
                     +{dayEvents.length - MAX_CHIPS_PER_DAY}
                   </span>
+                )}
+                {duePayments.length > 0 && (
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${PAYMENT_DOT_STYLE}`} />
                 )}
               </span>
             </button>

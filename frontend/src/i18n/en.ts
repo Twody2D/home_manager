@@ -91,6 +91,7 @@ export const en = {
     },
     dayList: {
       shared: "Shared",
+      payments: "Payments",
     },
     grid: {
       prevMonth: "Previous month",

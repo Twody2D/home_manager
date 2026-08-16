@@ -93,6 +93,7 @@ export const ru: typeof en = {
     },
     dayList: {
       shared: "Общие",
+      payments: "Платежи",
     },
     grid: {
       prevMonth: "Предыдущий месяц",

@@ -6,9 +6,12 @@ import { BulkScheduleForm } from "../components/BulkScheduleForm";
 import { MonthCalendarGrid } from "../components/MonthCalendarGrid";
 import { useCalendarEvents, useCreateEventsBulk, useDeleteEvent } from "../hooks/useCalendar";
 import { useMembers } from "../hooks/useMembers";
+import { useSubscriptions } from "../hooks/useFinance";
 import { useAuth } from "../auth/useAuth";
 import { SCOPE_DOT_STYLES, scopeEvents } from "../lib/calendarScope";
 import type { EventScope } from "../lib/calendarScope";
+import { PAYMENT_BORDER_STYLE, PAYMENT_DOT_STYLE, subscriptionsDueOn } from "../lib/subscriptionCalendar";
+import { formatMoney } from "../lib/money";
 import type { CalendarEvent } from "../api/types";
 
 function toDateInputValue(d: Date): string {
@@ -57,6 +60,7 @@ export function CalendarPage() {
     starts_before: endExclusive.toISOString(),
   });
   const membersQuery = useMembers();
+  const subscriptionsQuery = useSubscriptions({ active_only: true });
   const createEventsBulk = useCreateEventsBulk();
   const deleteEvent = useDeleteEvent();
 
@@ -103,6 +107,7 @@ export function CalendarPage() {
       items: scopedDayEvents.filter((s) => s.scope === "shared"),
     },
   ].filter((group) => group.items.length > 0);
+  const duePayments = subscriptionsDueOn(subscriptionsQuery.data?.items ?? [], selectedDate);
   const rawSelectedDateLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString(
     i18n.language,
     { weekday: "long", month: "long", day: "numeric" },
@@ -158,6 +163,7 @@ export function CalendarPage() {
           monthDate={viewMonth}
           events={events}
           members={members}
+          subscriptions={subscriptionsQuery.data?.items ?? []}
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}
           onPrevMonth={() => changeMonth(-1)}
@@ -169,10 +175,34 @@ export function CalendarPage() {
 
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-slate-500">{selectedDateLabel}</h2>
-        {dayGroups.length === 0 ? (
+        {dayGroups.length === 0 && duePayments.length === 0 ? (
           <p className="text-sm text-slate-400">{t("calendar.grid.dayEmpty")}</p>
         ) : (
-          dayGroups.map((group) => (
+          <>
+          {duePayments.length > 0 && (
+            <div className="space-y-1">
+              <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <span className={`h-2 w-2 rounded-full ${PAYMENT_DOT_STYLE}`} />
+                {t("calendar.dayList.payments")}
+              </h3>
+              <ul className="space-y-2">
+                {duePayments.map((subscription) => (
+                  <li
+                    key={subscription.id}
+                    className={`flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${PAYMENT_BORDER_STYLE}`}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
+                      {subscription.name}
+                    </span>
+                    <span className="shrink-0 text-sm font-medium text-slate-900">
+                      {formatMoney(subscription.amount, i18n.language)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {dayGroups.map((group) => (
             <div key={group.key} className="space-y-1">
               <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 <span className={`h-2 w-2 rounded-full ${SCOPE_DOT_STYLES[group.key as EventScope]}`} />
@@ -191,7 +221,8 @@ export function CalendarPage() {
                 ))}
               </ul>
             </div>
-          ))
+          ))}
+          </>
         )}
 
         <QuickAddEventForm
