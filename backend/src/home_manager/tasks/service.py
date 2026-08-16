@@ -30,6 +30,12 @@ class InvalidTaskWindowError(AppError):
     message = "preferred_end must not be before preferred_start"
 
 
+class InvalidBudgetOwnerError(AppError):
+    code = "INVALID_BUDGET_OWNER"
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    message = "Budget owner must be a member of the same household"
+
+
 async def _ensure_assignee_in_tenant(
     session: AsyncSession, *, tenant_id: uuid.UUID, assigned_to: uuid.UUID | None
 ) -> None:
@@ -40,10 +46,23 @@ async def _ensure_assignee_in_tenant(
         raise InvalidAssigneeError()
 
 
+async def _ensure_budget_owner_in_tenant(
+    session: AsyncSession, *, tenant_id: uuid.UUID, budget_owner_user_id: uuid.UUID | None
+) -> None:
+    if budget_owner_user_id is None:
+        return
+    owner = await session.get(User, budget_owner_user_id)
+    if owner is None or owner.tenant_id != tenant_id:
+        raise InvalidBudgetOwnerError()
+
+
 async def create_task(
     session: AsyncSession, *, tenant_id: uuid.UUID, created_by: uuid.UUID, payload: TaskCreate
 ) -> Task:
     await _ensure_assignee_in_tenant(session, tenant_id=tenant_id, assigned_to=payload.assigned_to)
+    await _ensure_budget_owner_in_tenant(
+        session, tenant_id=tenant_id, budget_owner_user_id=payload.budget_owner_user_id
+    )
 
     task = Task(
         tenant_id=tenant_id,
@@ -58,6 +77,8 @@ async def create_task(
         preferred_end=payload.preferred_end,
         location=payload.location,
         recurrence=payload.recurrence,
+        budget_amount=payload.budget_amount,
+        budget_owner_user_id=payload.budget_owner_user_id,
     )
     session.add(task)
     await session.flush()
@@ -106,6 +127,10 @@ async def update_task(
     if "assigned_to" in updates:
         await _ensure_assignee_in_tenant(
             session, tenant_id=tenant_id, assigned_to=updates["assigned_to"]
+        )
+    if "budget_owner_user_id" in updates:
+        await _ensure_budget_owner_in_tenant(
+            session, tenant_id=tenant_id, budget_owner_user_id=updates["budget_owner_user_id"]
         )
 
     new_preferred_start = updates.get("preferred_start", task.preferred_start)

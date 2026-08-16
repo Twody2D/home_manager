@@ -44,6 +44,68 @@ async def test_create_task_message_creates_task_for_self(
 
 
 @pytest.mark.asyncio
+async def test_create_task_message_with_shared_budget(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={"message": "create task: buy a gift budget=5000"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    tasks_response = await client.get("/api/v1/tasks", headers=_auth_headers(owner))
+    task = tasks_response.json()["items"][0]
+    assert task["id"] == body["task_id"]
+    assert task["title"] == "buy a gift"
+    assert task["budget_amount"] == "5000.00"
+    assert task["budget_owner_user_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_create_task_message_with_named_budget_person(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    lena = await _invite_member(client, owner)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={"message": "create task: repaint the fence budget=8000 budget_person=Лены"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    tasks_response = await client.get("/api/v1/tasks", headers=_auth_headers(owner))
+    task = tasks_response.json()["items"][0]
+    assert task["budget_amount"] == "8000.00"
+    assert task["budget_owner_user_id"] == lena["id"]
+
+
+@pytest.mark.asyncio
+async def test_create_task_message_without_budget_leaves_it_unset(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={"message": "create task: water the plants"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    tasks_response = await client.get("/api/v1/tasks", headers=_auth_headers(owner))
+    task = tasks_response.json()["items"][0]
+    assert task["budget_amount"] is None
+    assert task["budget_owner_user_id"] is None
+
+
+@pytest.mark.asyncio
 async def test_unrecognized_message_replies_in_requested_locale(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

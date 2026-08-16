@@ -5,6 +5,7 @@ _DURATION_RE = re.compile(r"(\d+)\s*(?:min|minutes?|мин\w*)")
 _CREATE_TASK_PREFIX_RE = re.compile(
     r"^(create task|add task|remind me to|new task)\s*:?\s*", re.IGNORECASE
 )
+_BUDGET_RE = re.compile(r"budget=(?P<amount>[\d.]+)(?:\s+budget_person=(?P<person>\S+))?")
 _SCHEDULE_PREFIX_RE = re.compile(r"^schedule\s*:\s*", re.IGNORECASE)
 _SCHEDULE_ITEM_RE = re.compile(
     r"(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<start>\d{2}:\d{2})-(?P<end>\d{2}:\d{2})\s+(?P<type>\w+)"
@@ -193,12 +194,19 @@ class MockLLMProvider:
             )
         elif _CREATE_TASK_PREFIX_RE.match(text):
             title = _CREATE_TASK_PREFIX_RE.sub("", text).strip()
+            budget_match = _BUDGET_RE.search(title)
+            budget_amount = float(budget_match.group("amount")) if budget_match else None
+            budget_person = budget_match.group("person") if budget_match else None
+            if budget_match:
+                title = title[: budget_match.start()].strip()
             duration_match = _DURATION_RE.search(lowered)
             duration = int(duration_match.group(1)) if duration_match else None
             payload = {
                 "intent": "create_task",
                 "title": title or text,
                 "duration_minutes": duration,
+                "budget_amount": budget_amount,
+                "budget_person": budget_person,
             }
         else:
             payload = {"intent": "unknown", "raw_message": text}

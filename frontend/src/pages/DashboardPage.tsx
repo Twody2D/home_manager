@@ -164,6 +164,9 @@ export function DashboardPage() {
               key={task.id}
               task={task}
               assignee={task.assigned_to ? membersById.get(task.assigned_to) : undefined}
+              budgetOwner={
+                task.budget_owner_user_id ? membersById.get(task.budget_owner_user_id) : undefined
+              }
               isUpdating={updateTask.isPending}
               onToggleComplete={handleComplete}
               onDelete={handleDelete}
@@ -179,6 +182,9 @@ export function DashboardPage() {
               key={task.id}
               task={task}
               assignee={task.assigned_to ? membersById.get(task.assigned_to) : undefined}
+              budgetOwner={
+                task.budget_owner_user_id ? membersById.get(task.budget_owner_user_id) : undefined
+              }
               isUpdating={updateTask.isPending}
               onToggleComplete={handleComplete}
               onDelete={handleDelete}
@@ -194,6 +200,9 @@ export function DashboardPage() {
               key={task.id}
               task={task}
               assignee={task.assigned_to ? membersById.get(task.assigned_to) : undefined}
+              budgetOwner={
+                task.budget_owner_user_id ? membersById.get(task.budget_owner_user_id) : undefined
+              }
               isUpdating={updateTask.isPending}
               onToggleComplete={handleComplete}
               onDelete={handleDelete}

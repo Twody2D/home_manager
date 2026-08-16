@@ -20,6 +20,8 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     preferred_end: null,
     location: null,
     recurrence: null,
+    budget_amount: null,
+    budget_owner_user_id: null,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     completed_at: null,

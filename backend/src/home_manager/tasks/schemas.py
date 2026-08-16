@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -18,6 +19,9 @@ class TaskCreate(BaseModel):
     preferred_end: datetime | None = None
     location: str | None = Field(default=None, max_length=200)
     recurrence: str | None = Field(default=None, max_length=200)
+    budget_amount: Decimal | None = Field(default=None, gt=0)
+    # Whose money the budget draws from — null means shared/household.
+    budget_owner_user_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _validate_preferred_window(self) -> Self:
@@ -42,6 +46,8 @@ class TaskUpdate(BaseModel):
     preferred_end: datetime | None = None
     location: str | None = Field(default=None, max_length=200)
     recurrence: str | None = Field(default=None, max_length=200)
+    budget_amount: Decimal | None = Field(default=None, gt=0)
+    budget_owner_user_id: uuid.UUID | None = None
 
 
 class TaskResponse(BaseModel):
@@ -61,6 +67,8 @@ class TaskResponse(BaseModel):
     preferred_end: datetime | None
     location: str | None
     recurrence: str | None
+    budget_amount: Decimal | None
+    budget_owner_user_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
     completed_at: datetime | None

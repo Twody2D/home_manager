@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import (
@@ -9,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     func,
@@ -46,6 +48,10 @@ class Task(Base):
         CheckConstraint(
             "preferred_start IS NULL OR preferred_end IS NULL OR preferred_end >= preferred_start",
             name="ck_tasks_preferred_window_valid",
+        ),
+        CheckConstraint(
+            "budget_amount IS NULL OR budget_amount > 0",
+            name="ck_tasks_budget_amount_positive",
         ),
         Index("ix_tasks_tenant_status", "tenant_id", "status"),
     )
@@ -86,6 +92,12 @@ class Task(Base):
     # Raw recurrence rule, not yet interpreted — the Planning Engine (Milestone 5)
     # will define and consume its concrete format.
     recurrence: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    budget_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    # Whose money the budget draws from — null means shared/household, same
+    # convention as Subscription.owner_user_id.
+    budget_owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

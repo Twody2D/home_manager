@@ -18,6 +18,9 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
   const [assignedTo, setAssignedTo] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("");
+  const [showBudget, setShowBudget] = useState(false);
+  const [budgetAmount, setBudgetAmount] = useState("");
+  const [budgetOwnerId, setBudgetOwnerId] = useState("");
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -29,6 +32,8 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
       assigned_to: assignedTo || null,
       due_at: dueAt ? new Date(dueAt).toISOString() : null,
       duration_minutes: durationMinutes ? Number(durationMinutes) : null,
+      budget_amount: budgetAmount || null,
+      budget_owner_user_id: budgetAmount ? budgetOwnerId || null : null,
     });
 
     setTitle("");
@@ -36,6 +41,9 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
     setAssignedTo("");
     setDueAt("");
     setDurationMinutes("");
+    setShowBudget(false);
+    setBudgetAmount("");
+    setBudgetOwnerId("");
   }
 
   return (
@@ -89,6 +97,51 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
           onChange={(e) => setDurationMinutes(e.target.value)}
           className="w-32 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
         />
+
+        {!showBudget ? (
+          <button
+            type="button"
+            onClick={() => setShowBudget(true)}
+            className="rounded-md border border-dashed border-slate-300 px-2 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          >
+            + {t("tasks.budget.add")}
+          </button>
+        ) : (
+          <>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              placeholder={t("tasks.budget.amountPlaceholder")}
+              value={budgetAmount}
+              onChange={(e) => setBudgetAmount(e.target.value)}
+              className="w-28 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            />
+            <select
+              value={budgetOwnerId}
+              onChange={(e) => setBudgetOwnerId(e.target.value)}
+              className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            >
+              <option value="">{t("tasks.budget.shared")}</option>
+              {members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.display_name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                setShowBudget(false);
+                setBudgetAmount("");
+                setBudgetOwnerId("");
+              }}
+              className="rounded-md px-2 py-1.5 text-sm font-medium text-slate-500 hover:bg-slate-100"
+            >
+              {t("finance.subscriptions.cancel")}
+            </button>
+          </>
+        )}
 
         <button
           type="submit"

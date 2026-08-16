@@ -14,6 +14,11 @@ class CreateTaskIntent(BaseModel):
     intent: Literal["create_task"] = "create_task"
     title: str = Field(min_length=1, max_length=200)
     duration_minutes: int | None = Field(default=None, gt=0)
+    budget_amount: Decimal | None = Field(default=None, gt=0)
+    # The household member's name as mentioned in the message, whose money
+    # the budget draws from — null when unspecified (shared/household),
+    # mirrors CreateSubscriptionIntent.owner: never defaults to the speaker.
+    budget_person: str | None = Field(default=None, max_length=100)
 
 
 class ScheduleEventItem(BaseModel):

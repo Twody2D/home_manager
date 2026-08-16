@@ -42,6 +42,8 @@ export interface Task {
   preferred_end: string | null;
   location: string | null;
   recurrence: string | null;
+  budget_amount: string | null;
+  budget_owner_user_id: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -65,6 +67,8 @@ export interface TaskCreateInput {
   preferred_end?: string | null;
   location?: string | null;
   recurrence?: string | null;
+  budget_amount?: string | null;
+  budget_owner_user_id?: string | null;
 }
 
 export type TaskUpdateInput = Partial<TaskCreateInput> & { status?: TaskStatus };

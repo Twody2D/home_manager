@@ -79,7 +79,16 @@ def _build_system_prompt(now: datetime) -> str:
         '("tomorrow", "next Monday", "this weekend"), never compute dates yourself:\n'
         f"{_build_date_lookup_table(now)}\n"
         'To create a single task: {"intent": "create_task", "title": "...", '
-        '"duration_minutes": <int or null>}\n'
+        '"duration_minutes": <int or null>, "budget_amount": <number or null>, '
+        '"budget_person": "<name>" or null}. budget_amount/budget_person are ONLY set when '
+        'the task itself has money set aside for it ("купить подарок за 5000", "на ремонт '
+        'выделено 20000, платит Лена") — budget_person names whose money it is, stays null '
+        'for a shared/household budget, never defaults to the speaker. Example — "создай '
+        'задачу купить подарок маме, бюджет 5000" → {"intent": "create_task", "title": '
+        '"Купить подарок маме", "duration_minutes": null, "budget_amount": 5000, '
+        '"budget_person": null}. Example — "Лена, купи продукты, бюджет 3000 с моей карты" '
+        'said by Лена → {"intent": "create_task", "title": "Купить продукты", '
+        '"duration_minutes": null, "budget_amount": 3000, "budget_person": "Лена"}.\n'
         "IMPORTANT — if the message is about MONEY (зарплата/salary, доход/income, "
         "подписка/subscription, аренда/rent, коммуналка/счётчики/utilities, or any "
         "regular payment), it is NEVER create_task and NEVER create_schedule, even if it "
@@ -599,6 +608,12 @@ async def execute_intent(
     normal service-layer authorization decides whether it's allowed.
     """
     if isinstance(intent, CreateTaskIntent):
+        budget_owner_id = None
+        if intent.budget_person is not None:
+            members = await users_service.list_members(session, tenant_id=tenant_id)
+            budget_owner_id = _resolve_person(
+                members, intent.budget_person, default_to_creator=False, creator_id=user_id
+            )
         task = await tasks_service.create_task(
             session,
             tenant_id=tenant_id,
@@ -607,6 +622,8 @@ async def execute_intent(
                 title=intent.title,
                 assigned_to=user_id,
                 duration_minutes=intent.duration_minutes,
+                budget_amount=intent.budget_amount,
+                budget_owner_user_id=budget_owner_id,
             ),
         )
         await session.commit()

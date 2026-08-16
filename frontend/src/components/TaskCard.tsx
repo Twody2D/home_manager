@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { Task, User } from "../api/types";
+import { formatMoney } from "../lib/money";
 
 const PRIORITY_STYLES: Record<Task["priority"], string> = {
   low: "bg-slate-100 text-slate-600",
@@ -11,12 +12,20 @@ const PRIORITY_STYLES: Record<Task["priority"], string> = {
 interface TaskCardProps {
   task: Task;
   assignee?: User;
+  budgetOwner?: User;
   onToggleComplete: (task: Task) => void;
   onDelete: (task: Task) => void;
   isUpdating?: boolean;
 }
 
-export function TaskCard({ task, assignee, onToggleComplete, onDelete, isUpdating }: TaskCardProps) {
+export function TaskCard({
+  task,
+  assignee,
+  budgetOwner,
+  onToggleComplete,
+  onDelete,
+  isUpdating,
+}: TaskCardProps) {
   const { t, i18n } = useTranslation();
   const isCompleted = task.status === "completed";
 
@@ -55,6 +64,12 @@ export function TaskCard({ task, assignee, onToggleComplete, onDelete, isUpdatin
           {assignee && (
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
               {assignee.display_name}
+            </span>
+          )}
+          {task.budget_amount && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700">
+              {formatMoney(task.budget_amount, i18n.language)}
+              {budgetOwner ? ` · ${budgetOwner.display_name}` : ` · ${t("tasks.budget.shared")}`}
             </span>
           )}
         </div>

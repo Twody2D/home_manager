@@ -66,6 +66,11 @@ export const ru: typeof en = {
     newTaskPlaceholder: "Новая задача…",
     unassigned: "Не назначено",
     durationPlaceholder: "Длительность (мин)",
+    budget: {
+      add: "Бюджет",
+      amountPlaceholder: "Сумма",
+      shared: "Общий",
+    },
   },
   taskCard: {
     markAsPending: "Отметить как активную",

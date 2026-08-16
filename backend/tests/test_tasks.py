@@ -75,6 +75,104 @@ async def test_create_task_rejects_assignee_outside_tenant(
 
 
 @pytest.mark.asyncio
+async def test_create_task_with_personal_budget(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "New shoes",
+            "budget_amount": "3500.00",
+            "budget_owner_user_id": owner["user"]["id"],
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["budget_amount"] == "3500.00"
+    assert body["budget_owner_user_id"] == owner["user"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_create_task_with_shared_budget_defaults_owner_to_null(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/tasks",
+        json={"title": "Grocery run", "budget_amount": "2000.00"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["budget_amount"] == "2000.00"
+    assert body["budget_owner_user_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_create_task_rejects_zero_budget(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/tasks",
+        json={"title": "Free task", "budget_amount": "0"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_task_rejects_budget_owner_outside_tenant(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner_a = await register_household(client, email="owner-a@example.com")
+    owner_b = await register_household(client, email="owner-b@example.com")
+
+    response = await client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "Sneaky budget",
+            "budget_amount": "100.00",
+            "budget_owner_user_id": owner_b["user"]["id"],
+        },
+        headers=_auth_headers(owner_a),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_BUDGET_OWNER"
+
+
+@pytest.mark.asyncio
+async def test_update_task_budget(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    created = await client.post(
+        "/api/v1/tasks", json={"title": "Repaint fence"}, headers=_auth_headers(owner)
+    )
+    task_id = created.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/tasks/{task_id}",
+        json={"budget_amount": "8000.00", "budget_owner_user_id": owner["user"]["id"]},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["budget_amount"] == "8000.00"
+    assert body["budget_owner_user_id"] == owner["user"]["id"]
+
+
+@pytest.mark.asyncio
 async def test_list_tasks_is_scoped_to_own_tenant(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

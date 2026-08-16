@@ -64,6 +64,11 @@ export const en = {
     newTaskPlaceholder: "New task…",
     unassigned: "Unassigned",
     durationPlaceholder: "Duration (min)",
+    budget: {
+      add: "Budget",
+      amountPlaceholder: "Amount",
+      shared: "Shared",
+    },
   },
   taskCard: {
     markAsPending: "Mark as pending",
