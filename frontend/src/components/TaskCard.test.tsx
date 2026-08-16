@@ -81,6 +81,7 @@ describe("TaskCard", () => {
           email: "lena@example.com",
           display_name: "Lena",
           role: "member",
+          gender: null,
         }}
         onToggleComplete={() => {}}
         onDelete={() => {}}

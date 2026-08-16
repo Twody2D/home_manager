@@ -83,10 +83,10 @@ def _build_system_prompt(now: datetime) -> str:
         "IMPORTANT — if the message is about MONEY (зарплата/salary, доход/income, "
         "подписка/subscription, аренда/rent, коммуналка/счётчики/utilities, or any "
         "regular payment), it is NEVER create_task and NEVER create_schedule, even if it "
-        'mentions a day of the month — use ONE of these three shapes instead:\n'
+        "mentions a day of the month — use ONE of these three shapes instead:\n"
         'M1) Someone receives regular money (a salary/income): {"intent": "create_income", '
         '"label": "...", "amount": <number>, "payment_day": <1-31>, "person": "<name>" or '
-        'null}. person is null when the message is about the speaker\'s own money ("я '
+        "null}. person is null when the message is about the speaker's own money (\"я "
         'получаю", "моя зарплата", "у меня") or names no one; set it ONLY when a specific '
         'household member is named. No day mentioned → use 25. Example — "Лена получает '
         '30000 25 числа" → {"intent": "create_income", "label": "Зарплата", "amount": 30000, '
@@ -101,7 +101,7 @@ def _build_system_prompt(now: datetime) -> str:
         'kind="recurring_expense" is a household bill that is not a named service (rent, '
         'utilities, electricity, water, internet, mortgage, insurance, "аренда", "коммуналка", '
         '"счётчики"). Rent and utilities are ALWAYS "recurring_expense", never "subscription". '
-        'owner stays null unless a specific person\'s name is given — do not default it to the '
+        "owner stays null unless a specific person's name is given — do not default it to the "
         'speaker. No day mentioned → use 1. Example — "добавь аренду квартиры 45000 в месяц, '
         'плачу 1 числа" → {"intent": "create_subscription", "name": "Аренда квартиры", '
         '"amount": 45000, "kind": "recurring_expense", "cadence": "monthly", "payment_day": 1, '
@@ -111,7 +111,7 @@ def _build_system_prompt(now: datetime) -> str:
         'за домен 1200 в марте" → {"intent": "create_subscription", "name": "Домен", "amount": '
         '1200, "kind": "recurring_expense", "cadence": "yearly", "payment_month": 3, '
         '"payment_day": 1, "owner": null}.\n'
-        'M3) A question about total household money (how much income/subscriptions/left over) '
+        "M3) A question about total household money (how much income/subscriptions/left over) "
         '— never compute it yourself, just recognize the question: {"intent": '
         '"query_finance_summary"}. Example — "сколько мы тратим на подписки" or "какой у нас '
         'доход" or "сколько денег остаётся" → {"intent": "query_finance_summary"}.\n'
@@ -749,9 +749,7 @@ async def execute_intent(
             value = Decimal(str(amount))
             return value / 12 if cadence == SubscriptionCadence.YEARLY else value
 
-        total_income: Decimal = sum(
-            (Decimal(str(i.amount)) for i in incomes), Decimal("0")
-        )
+        total_income: Decimal = sum((Decimal(str(i.amount)) for i in incomes), Decimal("0"))
         total_subscriptions: Decimal = sum(
             (
                 _monthly_equivalent(s.amount, s.cadence)
