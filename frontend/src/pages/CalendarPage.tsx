@@ -7,6 +7,7 @@ import { MonthCalendarGrid } from "../components/MonthCalendarGrid";
 import { useCalendarEvents, useCreateEventsBulk, useDeleteEvent } from "../hooks/useCalendar";
 import { useMembers } from "../hooks/useMembers";
 import { useAuth } from "../auth/useAuth";
+import { scopeEvents } from "../lib/calendarScope";
 import type { CalendarEvent } from "../api/types";
 
 function toDateInputValue(d: Date): string {
@@ -81,6 +82,20 @@ export function CalendarPage() {
   const selectedDayEvents = events
     .filter((event: CalendarEvent) => toDateInputValue(new Date(event.start_at)) === selectedDate)
     .sort((a, b) => a.start_at.localeCompare(b.start_at));
+  const scopedDayEvents = scopeEvents(selectedDayEvents, user?.id, partner?.id);
+  const dayGroups = [
+    { key: "shared", label: t("calendar.dayList.shared"), items: scopedDayEvents.filter((s) => s.scope === "shared") },
+    { key: "mine", label: t("calendar.dayList.mine"), items: scopedDayEvents.filter((s) => s.scope === "mine") },
+    ...(partner
+      ? [
+          {
+            key: "partner",
+            label: partner.display_name,
+            items: scopedDayEvents.filter((s) => s.scope === "partner"),
+          },
+        ]
+      : []),
+  ].filter((group) => group.items.length > 0);
   const rawSelectedDateLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString(
     i18n.language,
     { weekday: "long", month: "long", day: "numeric" },
@@ -135,6 +150,8 @@ export function CalendarPage() {
         <MonthCalendarGrid
           monthDate={viewMonth}
           events={events}
+          myId={user?.id}
+          partnerId={partner?.id}
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}
           onPrevMonth={() => changeMonth(-1)}
@@ -146,20 +163,27 @@ export function CalendarPage() {
 
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-slate-500">{selectedDateLabel}</h2>
-        {selectedDayEvents.length === 0 ? (
+        {dayGroups.length === 0 ? (
           <p className="text-sm text-slate-400">{t("calendar.grid.dayEmpty")}</p>
         ) : (
-          <ul className="space-y-2">
-            {selectedDayEvents.map((event) => (
-              <CalendarEventCard
-                key={event.id}
-                event={event}
-                owner={membersById.get(event.user_id)}
-                isOwn={event.user_id === user?.id}
-                onDelete={(e) => deleteEvent.mutate(e.id)}
-              />
-            ))}
-          </ul>
+          dayGroups.map((group) => (
+            <div key={group.key} className="space-y-1">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                {group.label}
+              </h3>
+              <ul className="space-y-2">
+                {group.items.map(({ event }) => (
+                  <CalendarEventCard
+                    key={event.id}
+                    event={event}
+                    owner={group.key === "shared" ? undefined : membersById.get(event.user_id)}
+                    isOwn={event.user_id === user?.id}
+                    onDelete={(e) => deleteEvent.mutate(e.id)}
+                  />
+                ))}
+              </ul>
+            </div>
+          ))
         )}
 
         <QuickAddEventForm

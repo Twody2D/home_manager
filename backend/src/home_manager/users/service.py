@@ -98,6 +98,16 @@ async def update_household_display_name(
     return tenant
 
 
+async def update_my_display_name(
+    session: AsyncSession, *, user_id: uuid.UUID, display_name: str
+) -> User:
+    user = await session.get(User, user_id)
+    assert user is not None  # user_id always comes from an authenticated user's own token
+    user.display_name = display_name.strip()
+    await session.flush()
+    return user
+
+
 async def redeem_invite(
     session: AsyncSession, *, raw_token: str, email: str, display_name: str, password: str
 ) -> User:

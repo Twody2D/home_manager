@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { TYPE_DOT_STYLES } from "../lib/eventTypeStyles";
+import { SCOPE_DOT_STYLES, scopeEvents } from "../lib/calendarScope";
 import type { CalendarEvent } from "../api/types";
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
@@ -24,6 +24,8 @@ function isSameDate(a: string, b: string): boolean {
 interface MonthCalendarGridProps {
   monthDate: Date;
   events: CalendarEvent[];
+  myId: string | undefined;
+  partnerId: string | undefined;
   selectedDate: string;
   onSelectDate: (date: string) => void;
   onPrevMonth: () => void;
@@ -35,6 +37,8 @@ interface MonthCalendarGridProps {
 export function MonthCalendarGrid({
   monthDate,
   events,
+  myId,
+  partnerId,
   selectedDate,
   onSelectDate,
   onPrevMonth,
@@ -50,15 +54,16 @@ export function MonthCalendarGrid({
   const leadingBlanks = isoWeekday(firstOfMonth) - 1;
   const totalCells = Math.ceil((leadingBlanks + daysInMonth) / 7) * 7;
 
-  const eventsByDate = new Map<string, CalendarEvent[]>();
-  for (const event of events) {
-    const key = toDateInputValue(new Date(event.start_at));
+  const scopedEvents = scopeEvents(events, myId, partnerId);
+  const eventsByDate = new Map<string, typeof scopedEvents>();
+  for (const scoped of scopedEvents) {
+    const key = toDateInputValue(new Date(scoped.event.start_at));
     const bucket = eventsByDate.get(key);
-    if (bucket) bucket.push(event);
-    else eventsByDate.set(key, [event]);
+    if (bucket) bucket.push(scoped);
+    else eventsByDate.set(key, [scoped]);
   }
   for (const bucket of eventsByDate.values()) {
-    bucket.sort((a, b) => a.start_at.localeCompare(b.start_at));
+    bucket.sort((a, b) => a.event.start_at.localeCompare(b.event.start_at));
   }
 
   const todayStr = toDateInputValue(new Date());
@@ -140,10 +145,10 @@ export function MonthCalendarGrid({
                 {cell.dayNum}
               </span>
               <span className="flex flex-wrap gap-0.5">
-                {dayEvents.slice(0, MAX_CHIPS_PER_DAY).map((event) => (
+                {dayEvents.slice(0, MAX_CHIPS_PER_DAY).map((scoped) => (
                   <span
-                    key={event.id}
-                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${TYPE_DOT_STYLES[event.event_type]}`}
+                    key={scoped.event.id}
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${SCOPE_DOT_STYLES[scoped.scope]}`}
                   />
                 ))}
                 {dayEvents.length > MAX_CHIPS_PER_DAY && (

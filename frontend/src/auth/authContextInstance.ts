@@ -9,6 +9,7 @@ export interface AuthContextValue {
   register: (input: authApi.RegisterInput) => Promise<void>;
   redeemInvite: (token: string, input: authApi.RedeemInviteInput) => Promise<void>;
   logout: () => Promise<void>;
+  setUser: (user: User) => void;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

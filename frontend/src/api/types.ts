@@ -183,6 +183,62 @@ export interface InvitePreview {
   expires_at: string;
 }
 
+export interface Income {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  label: string;
+  amount: string;
+  payment_day: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IncomeCreateInput {
+  user_id?: string | null;
+  label: string;
+  amount: string;
+  payment_day: number;
+}
+
+export type IncomeUpdateInput = Partial<IncomeCreateInput>;
+
+export interface IncomeListResponse {
+  items: Income[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface Subscription {
+  id: string;
+  tenant_id: string;
+  name: string;
+  amount: string;
+  payment_day: number;
+  owner_user_id: string | null;
+  active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubscriptionCreateInput {
+  name: string;
+  amount: string;
+  payment_day: number;
+  owner_user_id?: string | null;
+}
+
+export type SubscriptionUpdateInput = Partial<SubscriptionCreateInput> & { active?: boolean };
+
+export interface SubscriptionListResponse {
+  items: Subscription[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export type SmartHomeCommand = "turn_on" | "turn_off" | "toggle";
 
 export interface SmartHomeDevice {

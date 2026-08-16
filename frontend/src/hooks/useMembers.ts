@@ -33,3 +33,13 @@ export function useUpdateHousehold() {
     },
   });
 }
+
+export function useUpdateMe() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (displayName: string) => usersApi.updateMe(displayName),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: MEMBERS_KEY });
+    },
+  });
+}

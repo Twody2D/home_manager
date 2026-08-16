@@ -9,7 +9,7 @@ import { LanguageSwitcher } from "./LanguageSwitcher";
 // The tabs a horizontal swipe on the main content cycles through, in
 // on-screen order. Kept separate from the <nav> markup below so the swipe
 // handler doesn't have to reverse-engineer tab order from rendered DOM.
-const SWIPE_TABS = ["/", "/tasks", "/calendar", "/assistant", "/preferences"];
+const SWIPE_TABS = ["/", "/tasks", "/calendar", "/finance", "/assistant", "/preferences"];
 const SWIPE_DISTANCE_THRESHOLD = 60;
 // Horizontal movement must dominate vertical by this ratio, or a mostly-
 // vertical scroll gesture would misfire as a tab swipe.
@@ -122,6 +122,7 @@ export function AppShell() {
           <NavTab to="/" label={t("nav.today")} icon={TodayIcon} />
           <NavTab to="/tasks" label={t("nav.tasks")} icon={TasksIcon} />
           <NavTab to="/calendar" label={t("nav.calendar")} icon={CalendarIcon} />
+          <NavTab to="/finance" label={t("nav.finance")} icon={FinanceIcon} />
           <NavTab to="/assistant" label={t("nav.assistant")} icon={AssistantIcon} />
           <NavTab to="/preferences" label={t("nav.preferences")} icon={PreferencesIcon} />
         </div>
@@ -171,6 +172,15 @@ function CalendarIcon({ className }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
       <rect x="3" y="4" width="18" height="17" rx="2" />
       <path d="M3 9h18M8 2v4M16 2v4M8 14h.01M12 14h.01M16 14h.01" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function FinanceIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v10M9.5 9.5c0-1.1 1.12-2 2.5-2s2.5.9 2.5 2-1.12 2-2.5 2-2.5.9-2.5 2 1.12 2 2.5 2 2.5-.9 2.5-2" strokeLinecap="round" />
     </svg>
   );
 }

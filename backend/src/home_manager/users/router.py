@@ -14,11 +14,25 @@ from home_manager.users.schemas import (
     InvitePreviewResponse,
     MemberInviteRequest,
     MemberResponse,
+    MeUpdateRequest,
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
+
+
+@router.patch("/me", response_model=MemberResponse)
+async def update_me(
+    payload: MeUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: DbSession,
+) -> MemberResponse:
+    user = await service.update_my_display_name(
+        session, user_id=current_user.id, display_name=payload.display_name
+    )
+    await session.commit()
+    return MemberResponse.model_validate(user)
 
 
 @router.get("", response_model=list[MemberResponse])

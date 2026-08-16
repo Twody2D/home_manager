@@ -11,8 +11,59 @@ import {
   useSendTestNotification,
 } from "../hooks/useNotifications";
 import { useAliceLinkStatus, useIssueAliceToken, useRevokeAliceToken } from "../hooks/useAlice";
+import { useUpdateMe } from "../hooks/useMembers";
+import { useAuth } from "../auth/useAuth";
 import { ApiError } from "../api/client";
 import type { EnergyPattern } from "../api/types";
+
+function MyNameSection() {
+  const { t } = useTranslation();
+  const { user, setUser } = useAuth();
+  const updateMe = useUpdateMe();
+  const [name, setName] = useState(user?.display_name ?? "");
+  const [savedMessage, setSavedMessage] = useState(false);
+
+  useEffect(() => {
+    setName(user?.display_name ?? "");
+  }, [user?.display_name]);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    setSavedMessage(false);
+    const updated = await updateMe.mutateAsync(name.trim());
+    setUser(updated);
+    setSavedMessage(true);
+  }
+
+  return (
+    <form
+      onSubmit={(e) => void handleSubmit(e)}
+      className="space-y-2 rounded-lg border border-slate-200 bg-white p-4"
+    >
+      <h2 className="text-sm font-semibold text-slate-900">{t("preferences.myNameTitle")}</h2>
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+      />
+      <p className="text-xs text-slate-400">{t("preferences.myNameHint")}</p>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={updateMe.isPending || !name.trim()}
+          className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+        >
+          {t("common.save")}
+        </button>
+        {savedMessage && !updateMe.isPending && (
+          <span className="text-sm text-emerald-600">{t("common.saved")}</span>
+        )}
+      </div>
+    </form>
+  );
+}
 
 function NotificationsSection() {
   const { t } = useTranslation();
@@ -310,6 +361,7 @@ export function PreferencesPage() {
         {t("preferences.householdLink")}
       </Link>
 
+      <MyNameSection />
       <NotificationsSection />
       <AliceSection />
 

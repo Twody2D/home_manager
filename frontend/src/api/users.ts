@@ -23,3 +23,10 @@ export function updateHousehold(displayName: string | null): Promise<Household> 
     body: { display_name: displayName },
   });
 }
+
+export function updateMe(displayName: string): Promise<User> {
+  return apiFetch("/users/me", {
+    method: "PATCH",
+    body: { display_name: displayName },
+  });
+}
