@@ -525,6 +525,26 @@ async def test_ratio_5_2_stays_a_plain_workweek(
     assert len(proposed) == 5
 
 
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("работаю 2/2 весь август с 9 до 21", True),
+        ("work 2/2 from 9 to 21", True),
+        ("schedule: 2026-08-11 09:00-18:00 working_hours", True),
+        # Live testing showed the model sometimes fabricating a plausible-
+        # looking (not degenerate/equal) time for a message that never
+        # gave one at all — the message itself must contain a time-like
+        # token, regardless of what time value the model comes back with.
+        ("работаю 2/2 весь август начиная с 3го числа", False),
+        ("work 2/2 all of August", False),
+    ],
+)
+def test_message_mentions_time(message: str, expected: bool) -> None:
+    from home_manager.assistant.service import _message_mentions_time
+
+    assert _message_mentions_time(message) is expected
+
+
 @pytest.mark.asyncio
 async def test_identical_start_and_end_time_is_treated_as_missing_time(
     client: AsyncClient, register_household: RegisterHousehold

@@ -226,18 +226,38 @@ def _fix_ratio_misclassified_as_workweek(intent: CreateScheduleIntent, message: 
 
 def _has_degenerate_time(intent: CreateScheduleIntent) -> bool:
     """True when a schedule/pattern/rotation's start and end time are
-    identical — never a legitimate shift (that's zero duration), and what
-    Cloudflare's small model fabricates when the message didn't actually
-    give a time and it guesses instead of asking, rather than the prompt's
-    instruction to reply "unknown" in that case. Checking this invariant
-    directly is more robust than trying to detect "no time in the message"
-    from the message text itself.
+    identical — never a legitimate shift (that's zero duration), and one
+    thing Cloudflare's small model fabricates when the message didn't
+    actually give a time and it guesses instead of asking, rather than
+    following the prompt's instruction to reply "unknown" in that case.
     """
     if intent.pattern is not None and intent.pattern.start_time == intent.pattern.end_time:
         return True
     if intent.rotation is not None and intent.rotation.start_time == intent.rotation.end_time:
         return True
     return bool(intent.events) and all(item.start_time == item.end_time for item in intent.events)
+
+
+_TIME_MENTION_RE = re.compile(
+    r"\d{1,2}[:.]\d{2}"  # "09:00", "9.00"
+    r"|\bс\s*\d{1,2}\b[^.]{0,15}?\b(?:до|-)\s*\d{1,2}\b"  # "с 9 до 18", "с 9-18"
+    r"|\bfrom\s*\d{1,2}\b[^.]{0,15}?\bto\s*\d{1,2}\b",  # "from 9 to 6"
+    re.IGNORECASE,
+)
+
+
+def _message_mentions_time(message: str) -> bool:
+    """False when the user's own message has no time-like token at all.
+
+    _has_degenerate_time alone isn't reliable — live testing found the
+    model sometimes fabricates a *plausible-looking* time (e.g. "09:00" to
+    "21:00") for a message that never gave one, rather than the degenerate
+    same-time placeholder that check catches. Requiring the message itself
+    to contain something that looks like a time closes that gap: a model
+    can invent a fake time value, but it can't invent one that's actually
+    present in the user's own text.
+    """
+    return bool(_TIME_MENTION_RE.search(message))
 
 
 def _is_missing_time_error(exc: ValidationError) -> bool:
@@ -287,7 +307,7 @@ async def interpret_message(
         _fix_weekend_exclusion(schedule_intent, message)
         _fix_ordinal_day_mismatch(schedule_intent, message)
         _fix_ratio_misclassified_as_workweek(schedule_intent, message)
-        if _has_degenerate_time(schedule_intent):
+        if _has_degenerate_time(schedule_intent) or not _message_mentions_time(message):
             return UnknownIntent(raw_message=message, reason="missing_time")
         return schedule_intent
 
