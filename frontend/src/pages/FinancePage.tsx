@@ -59,6 +59,7 @@ function IncomeSection() {
   const [amount, setAmount] = useState("");
   const [paymentDay, setPaymentDay] = useState("25");
   const [forUserId, setForUserId] = useState(user?.id ?? "");
+  const [isAdding, setIsAdding] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -71,6 +72,7 @@ function IncomeSection() {
     });
     setLabel("");
     setAmount("");
+    setIsAdding(false);
   }
 
   return (
@@ -118,6 +120,15 @@ function IncomeSection() {
         </ul>
       )}
 
+      {!isAdding ? (
+        <button
+          type="button"
+          onClick={() => setIsAdding(true)}
+          className="w-full rounded-md border border-dashed border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+        >
+          + {t("finance.income.add")}
+        </button>
+      ) : (
       <form
         onSubmit={(e) => void handleSubmit(e)}
         className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3"
@@ -171,14 +182,24 @@ function IncomeSection() {
             </select>
           </label>
         )}
-        <button
-          type="submit"
-          disabled={createIncome.isPending || !label.trim() || !amount}
-          className="col-span-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-        >
-          {createIncome.isPending ? t("finance.income.adding") : t("finance.income.add")}
-        </button>
+        <div className="col-span-2 flex gap-2">
+          <button
+            type="submit"
+            disabled={createIncome.isPending || !label.trim() || !amount}
+            className="flex-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {createIncome.isPending ? t("finance.income.adding") : t("finance.income.add")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsAdding(false)}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            {t("finance.subscriptions.cancel")}
+          </button>
+        </div>
       </form>
+      )}
     </section>
   );
 }
@@ -332,6 +353,7 @@ function SubscriptionSection({
   const [draft, setDraft] = useState<SubscriptionDraft>(emptySubscriptionDraft());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<SubscriptionDraft>(emptySubscriptionDraft());
+  const [isAdding, setIsAdding] = useState(false);
 
   function draftToInput(d: SubscriptionDraft) {
     return {
@@ -350,6 +372,7 @@ function SubscriptionSection({
     if (!draft.name.trim() || !draft.amount) return;
     await createSubscription.mutateAsync(draftToInput(draft));
     setDraft(emptySubscriptionDraft());
+    setIsAdding(false);
   }
 
   function startEditing(subscription: Subscription) {
@@ -488,25 +511,44 @@ function SubscriptionSection({
         </ul>
       )}
 
-      <form
-        onSubmit={(e) => void handleSubmit(e)}
-        className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3"
-      >
-        <SubscriptionFields
-          draft={draft}
-          onChange={setDraft}
-          members={members}
-          nameLabel={nameLabel}
-          namePlaceholder={namePlaceholder}
-        />
+      {!isAdding ? (
         <button
-          type="submit"
-          disabled={createSubscription.isPending || !draft.name.trim() || !draft.amount}
-          className="col-span-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          type="button"
+          onClick={() => setIsAdding(true)}
+          className="w-full rounded-md border border-dashed border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
         >
-          {createSubscription.isPending ? t("finance.subscriptions.adding") : addLabel}
+          + {addLabel}
         </button>
-      </form>
+      ) : (
+        <form
+          onSubmit={(e) => void handleSubmit(e)}
+          className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3"
+        >
+          <SubscriptionFields
+            draft={draft}
+            onChange={setDraft}
+            members={members}
+            nameLabel={nameLabel}
+            namePlaceholder={namePlaceholder}
+          />
+          <div className="col-span-2 flex gap-2">
+            <button
+              type="submit"
+              disabled={createSubscription.isPending || !draft.name.trim() || !draft.amount}
+              className="flex-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+            >
+              {createSubscription.isPending ? t("finance.subscriptions.adding") : addLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAdding(false)}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              {t("finance.subscriptions.cancel")}
+            </button>
+          </div>
+        </form>
+      )}
     </section>
   );
 }
