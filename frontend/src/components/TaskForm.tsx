@@ -95,7 +95,7 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
           placeholder={t("tasks.durationPlaceholder")}
           value={durationMinutes}
           onChange={(e) => setDurationMinutes(e.target.value)}
-          className="w-32 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          className="w-44 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
         />
 
         {!showBudget ? (

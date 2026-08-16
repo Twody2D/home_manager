@@ -186,19 +186,29 @@ export function CalendarPage() {
                 {t("calendar.dayList.payments")}
               </h3>
               <ul className="space-y-2">
-                {duePayments.map((subscription) => (
-                  <li
-                    key={subscription.id}
-                    className={`flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${PAYMENT_BORDER_STYLE}`}
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
-                      {subscription.name}
-                    </span>
-                    <span className="shrink-0 text-sm font-medium text-slate-900">
-                      {formatMoney(subscription.amount, i18n.language)}
-                    </span>
-                  </li>
-                ))}
+                {duePayments.map((subscription) => {
+                  const owner = subscription.owner_user_id
+                    ? membersById.get(subscription.owner_user_id)
+                    : undefined;
+                  return (
+                    <li
+                      key={subscription.id}
+                      className={`flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${PAYMENT_BORDER_STYLE}`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-slate-900">
+                          {subscription.name}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">
+                          {owner ? owner.display_name : t("finance.subscriptions.ownerNone")}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-sm font-medium text-slate-900">
+                        {formatMoney(subscription.amount, i18n.language)}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
