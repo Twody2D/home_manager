@@ -7,7 +7,8 @@ import { MonthCalendarGrid } from "../components/MonthCalendarGrid";
 import { useCalendarEvents, useCreateEventsBulk, useDeleteEvent } from "../hooks/useCalendar";
 import { useMembers } from "../hooks/useMembers";
 import { useAuth } from "../auth/useAuth";
-import { scopeEvents } from "../lib/calendarScope";
+import { SCOPE_DOT_STYLES, scopeEvents } from "../lib/calendarScope";
+import type { EventScope } from "../lib/calendarScope";
 import type { CalendarEvent } from "../api/types";
 
 function toDateInputValue(d: Date): string {
@@ -168,7 +169,8 @@ export function CalendarPage() {
         ) : (
           dayGroups.map((group) => (
             <div key={group.key} className="space-y-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <span className={`h-2 w-2 rounded-full ${SCOPE_DOT_STYLES[group.key as EventScope]}`} />
                 {group.label}
               </h3>
               <ul className="space-y-2">
@@ -178,6 +180,7 @@ export function CalendarPage() {
                     event={event}
                     owner={group.key === "shared" ? undefined : membersById.get(event.user_id)}
                     isOwn={event.user_id === user?.id}
+                    scope={group.key as EventScope}
                     onDelete={(e) => deleteEvent.mutate(e.id)}
                   />
                 ))}

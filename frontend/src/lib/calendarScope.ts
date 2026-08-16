@@ -56,6 +56,12 @@ export function scopeEvents(
 
 export const SCOPE_DOT_STYLES: Record<EventScope, string> = {
   mine: "bg-sky-500",
-  partner: "bg-rose-500",
+  partner: "bg-pink-500",
   shared: "bg-violet-500",
+};
+
+export const SCOPE_BORDER_STYLES: Record<EventScope, string> = {
+  mine: "border-l-4 border-l-sky-500",
+  partner: "border-l-4 border-l-pink-500",
+  shared: "border-l-4 border-l-violet-500",
 };

@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { TYPE_STYLES } from "../lib/eventTypeStyles";
+import { SCOPE_BORDER_STYLES } from "../lib/calendarScope";
+import type { EventScope } from "../lib/calendarScope";
 import type { CalendarEvent, User } from "../api/types";
 
 function formatTimeRange(startAt: string, endAt: string): string {
@@ -13,13 +15,18 @@ interface CalendarEventCardProps {
   event: CalendarEvent;
   owner?: User;
   isOwn: boolean;
+  scope?: EventScope;
   onDelete: (event: CalendarEvent) => void;
 }
 
-export function CalendarEventCard({ event, owner, isOwn, onDelete }: CalendarEventCardProps) {
+export function CalendarEventCard({ event, owner, isOwn, scope, onDelete }: CalendarEventCardProps) {
   const { t } = useTranslation();
   return (
-    <li className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+    <li
+      className={`flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${
+        scope ? SCOPE_BORDER_STYLES[scope] : ""
+      }`}
+    >
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-slate-900">{event.title}</p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
