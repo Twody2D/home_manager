@@ -1,10 +1,12 @@
 import type { CalendarEvent } from "../api/types";
+import type { PersonScope } from "./personScope";
 
-export type EventScope = "mine" | "partner" | "shared";
+export type { PersonScope as EventScope } from "./personScope";
+export { SCOPE_BORDER_STYLES, SCOPE_DOT_STYLES } from "./personScope";
 
 export interface ScopedEvent {
   event: CalendarEvent;
-  scope: EventScope;
+  scope: PersonScope;
 }
 
 function pairKey(event: CalendarEvent): string {
@@ -53,15 +55,3 @@ export function scopeEvents(
   }
   return result;
 }
-
-export const SCOPE_DOT_STYLES: Record<EventScope, string> = {
-  mine: "bg-sky-500",
-  partner: "bg-pink-500",
-  shared: "bg-violet-500",
-};
-
-export const SCOPE_BORDER_STYLES: Record<EventScope, string> = {
-  mine: "border-l-4 border-l-sky-500",
-  partner: "border-l-4 border-l-pink-500",
-  shared: "border-l-4 border-l-violet-500",
-};

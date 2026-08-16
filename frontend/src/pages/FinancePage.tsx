@@ -13,6 +13,7 @@ import {
   useUpdateSubscription,
 } from "../hooks/useFinance";
 import { formatMoney } from "../lib/money";
+import { SCOPE_BORDER_STYLES, scopeForOwner } from "../lib/personScope";
 import type { Income, Subscription, SubscriptionCadence, User } from "../api/types";
 
 function sumAmounts(items: { amount: string }[]): number {
@@ -296,6 +297,7 @@ function SubscriptionFields({
 
 function SubscriptionSection() {
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
   const membersQuery = useMembers();
   const subscriptionsQuery = useSubscriptions();
   const createSubscription = useCreateSubscription();
@@ -304,6 +306,7 @@ function SubscriptionSection() {
 
   const members = membersQuery.data ?? [];
   const membersById = new Map(members.map((member) => [member.id, member]));
+  const partner = members.find((member) => member.id !== user?.id);
   const subscriptions = subscriptionsQuery.data?.items ?? [];
   const activeSubscriptions = subscriptions.filter((s: Subscription) => s.active);
 
@@ -387,10 +390,11 @@ function SubscriptionSection() {
             const owner = subscription.owner_user_id
               ? membersById.get(subscription.owner_user_id)
               : undefined;
+            const scope = scopeForOwner(subscription.owner_user_id, user?.id, partner?.id);
             return (
               <li
                 key={subscription.id}
-                className={`rounded-md border border-slate-200 px-3 py-2 ${
+                className={`rounded-md border border-slate-200 px-3 py-2 ${SCOPE_BORDER_STYLES[scope]} ${
                   subscription.active ? "" : "opacity-50"
                 }`}
               >
