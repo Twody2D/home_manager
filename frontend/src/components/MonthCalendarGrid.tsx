@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { SCOPE_DOT_STYLES, scopeEvents } from "../lib/calendarScope";
-import type { CalendarEvent } from "../api/types";
+import type { CalendarEvent, User } from "../api/types";
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 const MAX_CHIPS_PER_DAY = 3;
@@ -24,8 +24,7 @@ function isSameDate(a: string, b: string): boolean {
 interface MonthCalendarGridProps {
   monthDate: Date;
   events: CalendarEvent[];
-  myId: string | undefined;
-  partnerId: string | undefined;
+  members: User[];
   selectedDate: string;
   onSelectDate: (date: string) => void;
   onPrevMonth: () => void;
@@ -37,8 +36,7 @@ interface MonthCalendarGridProps {
 export function MonthCalendarGrid({
   monthDate,
   events,
-  myId,
-  partnerId,
+  members,
   selectedDate,
   onSelectDate,
   onPrevMonth,
@@ -54,7 +52,7 @@ export function MonthCalendarGrid({
   const leadingBlanks = isoWeekday(firstOfMonth) - 1;
   const totalCells = Math.ceil((leadingBlanks + daysInMonth) / 7) * 7;
 
-  const scopedEvents = scopeEvents(events, myId, partnerId);
+  const scopedEvents = scopeEvents(events, members);
   const eventsByDate = new Map<string, typeof scopedEvents>();
   for (const scoped of scopedEvents) {
     const key = toDateInputValue(new Date(scoped.event.start_at));

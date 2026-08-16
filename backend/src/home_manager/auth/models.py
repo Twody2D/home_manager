@@ -15,6 +15,11 @@ class Role(StrEnum):
     MEMBER = "member"
 
 
+class Gender(StrEnum):
+    MALE = "male"
+    FEMALE = "female"
+
+
 class Tenant(Base):
     """A household — the tenant boundary all other data hangs off of."""
 
@@ -47,6 +52,12 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     role: Mapped[Role] = mapped_column(
         Enum(Role, name="user_role", native_enum=True), nullable=False, default=Role.MEMBER
+    )
+    # Used only to give each household member a consistent color across the
+    # app (calendar entries, subscriptions, income) without hardcoding which
+    # named person gets which color — unset until the user picks one.
+    gender: Mapped[Gender | None] = mapped_column(
+        Enum(Gender, name="user_gender", native_enum=True), nullable=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(

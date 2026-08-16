@@ -5,7 +5,7 @@ from fastapi import status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from home_manager.auth.models import MemberInvite, Role, Tenant, User
+from home_manager.auth.models import Gender, MemberInvite, Role, Tenant, User
 from home_manager.auth.security import generate_invite_token, hash_invite_token, hash_password
 from home_manager.auth.service import EmailAlreadyRegisteredError
 from home_manager.core.errors import AppError
@@ -98,12 +98,14 @@ async def update_household_display_name(
     return tenant
 
 
-async def update_my_display_name(
-    session: AsyncSession, *, user_id: uuid.UUID, display_name: str
+async def update_me(
+    session: AsyncSession, *, user_id: uuid.UUID, display_name: str, gender: Gender | None
 ) -> User:
     user = await session.get(User, user_id)
     assert user is not None  # user_id always comes from an authenticated user's own token
     user.display_name = display_name.strip()
+    if gender is not None:
+        user.gender = gender
     await session.flush()
     return user
 

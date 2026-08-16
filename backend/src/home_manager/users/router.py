@@ -28,8 +28,8 @@ async def update_me(
     current_user: Annotated[User, Depends(get_current_user)],
     session: DbSession,
 ) -> MemberResponse:
-    user = await service.update_my_display_name(
-        session, user_id=current_user.id, display_name=payload.display_name
+    user = await service.update_me(
+        session, user_id=current_user.id, display_name=payload.display_name, gender=payload.gender
     )
     await session.commit()
     return MemberResponse.model_validate(user)

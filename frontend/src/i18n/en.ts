@@ -90,7 +90,6 @@ export const en = {
       shared: "Shared event",
     },
     dayList: {
-      mine: "Mine",
       shared: "Shared",
     },
     grid: {
@@ -174,6 +173,11 @@ export const en = {
     aboutMeTitle: "About me",
     myNameTitle: "My name",
     myNameHint: "Shown to your household everywhere in the app.",
+    genderTitle: "Gender",
+    genderHint: "Used to color your entries consistently across calendar and finance.",
+    genderUnset: "Not set",
+    genderMale: "Male",
+    genderFemale: "Female",
     workplace: "Workplace",
     workplacePlaceholder: "e.g. Corner Bakery",
     workplaceHint:

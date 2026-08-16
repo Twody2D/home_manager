@@ -495,3 +495,28 @@ async def test_update_my_display_name(
 
     list_response = await client.get("/api/v1/users", headers=_auth_headers(owner))
     assert list_response.json()[0]["display_name"] == "Паша"
+
+
+@pytest.mark.asyncio
+async def test_update_my_gender(client: AsyncClient, register_household: RegisterHousehold) -> None:
+    owner = await register_household(client)
+
+    response = await client.patch(
+        "/api/v1/users/me",
+        json={"display_name": "Owner", "gender": "male"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["gender"] == "male"
+
+
+@pytest.mark.asyncio
+async def test_gender_defaults_to_unset(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.get("/api/v1/users", headers=_auth_headers(owner))
+
+    assert response.json()[0]["gender"] is None

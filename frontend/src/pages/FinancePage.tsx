@@ -87,7 +87,10 @@ function IncomeSection() {
       ) : (
         <ul className="space-y-1.5">
           {incomes.map((income: Income) => (
-            <li key={income.id} className="rounded-md border border-slate-200 px-3 py-2">
+            <li
+              key={income.id}
+              className={`rounded-md border border-slate-200 px-3 py-2 ${SCOPE_BORDER_STYLES[scopeForOwner(income.user_id, members)]}`}
+            >
               <div className="flex items-start justify-between gap-2">
                 <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
                   {income.label}
@@ -315,7 +318,6 @@ function SubscriptionSection({
   addLabel: string;
 }) {
   const { t, i18n } = useTranslation();
-  const { user } = useAuth();
   const membersQuery = useMembers();
   const subscriptionsQuery = useSubscriptions();
   const createSubscription = useCreateSubscription();
@@ -324,7 +326,6 @@ function SubscriptionSection({
 
   const members = membersQuery.data ?? [];
   const membersById = new Map(members.map((member) => [member.id, member]));
-  const partner = members.find((member) => member.id !== user?.id);
   const subscriptions = (subscriptionsQuery.data?.items ?? []).filter((s) => s.kind === kind);
   const activeSubscriptions = subscriptions.filter((s: Subscription) => s.active);
 
@@ -415,7 +416,7 @@ function SubscriptionSection({
             const owner = subscription.owner_user_id
               ? membersById.get(subscription.owner_user_id)
               : undefined;
-            const scope = scopeForOwner(subscription.owner_user_id, user?.id, partner?.id);
+            const scope = scopeForOwner(subscription.owner_user_id, members);
             return (
               <li
                 key={subscription.id}

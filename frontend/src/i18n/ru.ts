@@ -92,7 +92,6 @@ export const ru: typeof en = {
       shared: "Общее событие",
     },
     dayList: {
-      mine: "Мои",
       shared: "Общие",
     },
     grid: {
@@ -176,6 +175,11 @@ export const ru: typeof en = {
     aboutMeTitle: "О себе",
     myNameTitle: "Моё имя",
     myNameHint: "Показывается вашей семье везде в приложении.",
+    genderTitle: "Пол",
+    genderHint: "Используется, чтобы ваши записи в календаре и финансах всегда были одного цвета.",
+    genderUnset: "Не указан",
+    genderMale: "Мужской",
+    genderFemale: "Женский",
     workplace: "Место работы",
     workplacePlaceholder: "например, Пятёрочка",
     workplaceHint:

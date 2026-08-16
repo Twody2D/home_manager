@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as usersApi from "../api/users";
+import type { Gender } from "../api/types";
 
 const MEMBERS_KEY = ["members"] as const;
 const HOUSEHOLD_KEY = ["household"] as const;
@@ -37,7 +38,8 @@ export function useUpdateHousehold() {
 export function useUpdateMe() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (displayName: string) => usersApi.updateMe(displayName),
+    mutationFn: ({ displayName, gender }: { displayName: string; gender: Gender | null }) =>
+      usersApi.updateMe(displayName, gender),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: MEMBERS_KEY });
     },

@@ -14,24 +14,29 @@ import { useAliceLinkStatus, useIssueAliceToken, useRevokeAliceToken } from "../
 import { useUpdateMe } from "../hooks/useMembers";
 import { useAuth } from "../auth/useAuth";
 import { ApiError } from "../api/client";
-import type { EnergyPattern } from "../api/types";
+import type { EnergyPattern, Gender } from "../api/types";
 
 function MyNameSection() {
   const { t } = useTranslation();
   const { user, setUser } = useAuth();
   const updateMe = useUpdateMe();
   const [name, setName] = useState(user?.display_name ?? "");
+  const [gender, setGender] = useState<Gender | "">(user?.gender ?? "");
   const [savedMessage, setSavedMessage] = useState(false);
 
   useEffect(() => {
     setName(user?.display_name ?? "");
-  }, [user?.display_name]);
+    setGender(user?.gender ?? "");
+  }, [user?.display_name, user?.gender]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!name.trim()) return;
     setSavedMessage(false);
-    const updated = await updateMe.mutateAsync(name.trim());
+    const updated = await updateMe.mutateAsync({
+      displayName: name.trim(),
+      gender: gender || null,
+    });
     setUser(updated);
     setSavedMessage(true);
   }
@@ -49,6 +54,21 @@ function MyNameSection() {
         className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
       />
       <p className="text-xs text-slate-400">{t("preferences.myNameHint")}</p>
+
+      <label className="block text-sm">
+        <span className="mb-1 block text-slate-600">{t("preferences.genderTitle")}</span>
+        <select
+          value={gender}
+          onChange={(e) => setGender(e.target.value as Gender | "")}
+          className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+        >
+          <option value="">{t("preferences.genderUnset")}</option>
+          <option value="male">{t("preferences.genderMale")}</option>
+          <option value="female">{t("preferences.genderFemale")}</option>
+        </select>
+        <span className="mt-1 block text-xs text-slate-400">{t("preferences.genderHint")}</span>
+      </label>
+
       <div className="flex items-center gap-3">
         <button
           type="submit"

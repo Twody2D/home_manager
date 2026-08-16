@@ -83,19 +83,25 @@ export function CalendarPage() {
   const selectedDayEvents = events
     .filter((event: CalendarEvent) => toDateInputValue(new Date(event.start_at)) === selectedDate)
     .sort((a, b) => a.start_at.localeCompare(b.start_at));
-  const scopedDayEvents = scopeEvents(selectedDayEvents, user?.id, partner?.id);
+  const scopedDayEvents = scopeEvents(selectedDayEvents, members);
+  const maleMember = members.find((member) => member.gender === "male");
+  const femaleMember = members.find((member) => member.gender === "female");
   const dayGroups = [
-    { key: "shared", label: t("calendar.dayList.shared"), items: scopedDayEvents.filter((s) => s.scope === "shared") },
-    { key: "mine", label: t("calendar.dayList.mine"), items: scopedDayEvents.filter((s) => s.scope === "mine") },
-    ...(partner
-      ? [
-          {
-            key: "partner",
-            label: partner.display_name,
-            items: scopedDayEvents.filter((s) => s.scope === "partner"),
-          },
-        ]
-      : []),
+    {
+      key: "male",
+      label: maleMember?.display_name ?? t("preferences.genderMale"),
+      items: scopedDayEvents.filter((s) => s.scope === "male"),
+    },
+    {
+      key: "female",
+      label: femaleMember?.display_name ?? t("preferences.genderFemale"),
+      items: scopedDayEvents.filter((s) => s.scope === "female"),
+    },
+    {
+      key: "shared",
+      label: t("calendar.dayList.shared"),
+      items: scopedDayEvents.filter((s) => s.scope === "shared"),
+    },
   ].filter((group) => group.items.length > 0);
   const rawSelectedDateLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString(
     i18n.language,
@@ -151,8 +157,7 @@ export function CalendarPage() {
         <MonthCalendarGrid
           monthDate={viewMonth}
           events={events}
-          myId={user?.id}
-          partnerId={partner?.id}
+          members={members}
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}
           onPrevMonth={() => changeMonth(-1)}

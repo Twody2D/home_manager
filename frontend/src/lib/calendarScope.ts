@@ -1,4 +1,5 @@
-import type { CalendarEvent } from "../api/types";
+import type { CalendarEvent, User } from "../api/types";
+import { scopeForOwner } from "./personScope";
 import type { PersonScope } from "./personScope";
 
 export type { PersonScope as EventScope } from "./personScope";
@@ -16,13 +17,11 @@ function pairKey(event: CalendarEvent): string {
 // A "shared" event is stored as two independent per-user rows (see
 // QuickAddEventForm's shared checkbox) rather than a single row with a
 // shared flag — the backend has no such concept. We detect a shared pair
-// here by matching title/type/start/end between my event and my partner's,
-// and collapse the pair into one representative (mine) for display.
-export function scopeEvents(
-  events: CalendarEvent[],
-  myId: string | undefined,
-  partnerId: string | undefined,
-): ScopedEvent[] {
+// here by matching title/type/start/end between two different household
+// members' events, and collapse the pair into one representative for
+// display — this works for any two-person household, not just "me" vs "my
+// partner", so it stays correct regardless of who's logged in.
+export function scopeEvents(events: CalendarEvent[], members: User[]): ScopedEvent[] {
   const byKey = new Map<string, CalendarEvent[]>();
   for (const event of events) {
     const key = pairKey(event);
@@ -34,11 +33,10 @@ export function scopeEvents(
   const sharedIds = new Set<string>();
   const hiddenIds = new Set<string>();
   for (const bucket of byKey.values()) {
-    const mine = bucket.find((e) => e.user_id === myId);
-    const partnerCopy = partnerId ? bucket.find((e) => e.user_id === partnerId) : undefined;
-    if (mine && partnerCopy) {
-      sharedIds.add(mine.id);
-      hiddenIds.add(partnerCopy.id);
+    const distinctOwners = new Set(bucket.map((e) => e.user_id));
+    if (bucket.length === 2 && distinctOwners.size === 2) {
+      sharedIds.add(bucket[0].id);
+      hiddenIds.add(bucket[1].id);
     }
   }
 
@@ -47,10 +45,8 @@ export function scopeEvents(
     if (hiddenIds.has(event.id)) continue;
     if (sharedIds.has(event.id)) {
       result.push({ event, scope: "shared" });
-    } else if (event.user_id === myId) {
-      result.push({ event, scope: "mine" });
     } else {
-      result.push({ event, scope: "partner" });
+      result.push({ event, scope: scopeForOwner(event.user_id, members) });
     }
   }
   return result;

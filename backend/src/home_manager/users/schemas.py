@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from home_manager.auth.models import Role
+from home_manager.auth.models import Gender, Role
 
 
 class MemberInviteRequest(BaseModel):
@@ -21,6 +21,7 @@ class MemberResponse(BaseModel):
     email: EmailStr
     display_name: str
     role: Role
+    gender: Gender | None
 
 
 class InviteLinkResponse(BaseModel):
@@ -50,3 +51,4 @@ class HouseholdUpdateRequest(BaseModel):
 
 class MeUpdateRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=100)
+    gender: Gender | None = None

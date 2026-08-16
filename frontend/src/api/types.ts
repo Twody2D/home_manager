@@ -1,4 +1,5 @@
 export type Role = "owner" | "member";
+export type Gender = "male" | "female";
 
 export interface User {
   id: string;
@@ -6,6 +7,7 @@ export interface User {
   email: string;
   display_name: string;
   role: Role;
+  gender: Gender | null;
 }
 
 export interface TokenResponse {

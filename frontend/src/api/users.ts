@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import type { Household, InviteLink, InvitePreview, User } from "./types";
+import type { Gender, Household, InviteLink, InvitePreview, User } from "./types";
 
 export function listMembers(): Promise<User[]> {
   return apiFetch("/users");
@@ -24,9 +24,9 @@ export function updateHousehold(displayName: string | null): Promise<Household> 
   });
 }
 
-export function updateMe(displayName: string): Promise<User> {
+export function updateMe(displayName: string, gender: Gender | null): Promise<User> {
   return apiFetch("/users/me", {
     method: "PATCH",
-    body: { display_name: displayName },
+    body: { display_name: displayName, gender },
   });
 }
