@@ -1,5 +1,4 @@
-import { useRef } from "react";
-import type { TouchEvent } from "react";
+import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth/useAuth";
@@ -24,30 +23,72 @@ export function AppShell() {
   const title = householdTitle(householdQuery.data, membersQuery.data ?? []);
   const navigate = useNavigate();
   const location = useLocation();
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
+  // Kept in a ref (not state/closure-only) so the touchmove listener below
+  // — attached once — always reads the current route without having to
+  // tear down and re-attach on every navigation.
+  const pathnameRef = useRef(location.pathname);
+  pathnameRef.current = location.pathname;
 
-  function handleTouchStart(event: TouchEvent) {
-    const touch = event.touches[0];
-    touchStart.current = { x: touch.clientX, y: touch.clientY };
-  }
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
 
-  function handleTouchEnd(event: TouchEvent) {
-    const start = touchStart.current;
-    touchStart.current = null;
-    if (!start) return;
+    let start: { x: number; y: number } | null = null;
+    // Undecided until the first move past a small jitter threshold, so a
+    // vertical scroll never gets treated as a horizontal swipe mid-gesture.
+    let horizontal: boolean | null = null;
 
-    const touch = event.changedTouches[0];
-    const dx = touch.clientX - start.x;
-    const dy = touch.clientY - start.y;
-    if (Math.abs(dx) < SWIPE_DISTANCE_THRESHOLD) return;
-    if (Math.abs(dx) < Math.abs(dy) * SWIPE_DIRECTION_RATIO) return;
+    function onTouchStart(event: TouchEvent) {
+      const touch = event.touches[0];
+      start = { x: touch.clientX, y: touch.clientY };
+      horizontal = null;
+    }
 
-    const currentIndex = SWIPE_TABS.indexOf(location.pathname);
-    if (currentIndex === -1) return;
-    const nextIndex = currentIndex + (dx < 0 ? 1 : -1);
-    if (nextIndex < 0 || nextIndex >= SWIPE_TABS.length) return;
-    navigate(SWIPE_TABS[nextIndex]);
-  }
+    function onTouchMove(event: TouchEvent) {
+      if (!start) return;
+      const touch = event.touches[0];
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      if (horizontal === null && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+        horizontal = Math.abs(dx) > Math.abs(dy) * SWIPE_DIRECTION_RATIO;
+      }
+      // React's synthetic touch handlers are passive and can't call
+      // preventDefault — that's what let the browser's own back/forward
+      // edge-swipe gesture keep firing alongside ours, landing on
+      // whatever the history stack had (including stale tabs) instead of
+      // the neighboring one. A manually-attached, non-passive listener
+      // can actually suppress it once a swipe reads as horizontal.
+      if (horizontal) event.preventDefault();
+    }
+
+    function onTouchEnd(event: TouchEvent) {
+      const startPos = start;
+      start = null;
+      if (!startPos || !horizontal) return;
+
+      const touch = event.changedTouches[0];
+      const dx = touch.clientX - startPos.x;
+      const dy = touch.clientY - startPos.y;
+      if (Math.abs(dx) < SWIPE_DISTANCE_THRESHOLD) return;
+      if (Math.abs(dx) < Math.abs(dy) * SWIPE_DIRECTION_RATIO) return;
+
+      const currentIndex = SWIPE_TABS.indexOf(pathnameRef.current);
+      if (currentIndex === -1) return;
+      const nextIndex = currentIndex + (dx < 0 ? 1 : -1);
+      if (nextIndex < 0 || nextIndex >= SWIPE_TABS.length) return;
+      navigate(SWIPE_TABS[nextIndex]);
+    }
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [navigate]);
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
@@ -69,10 +110,9 @@ export function AppShell() {
       </header>
 
       <main
+        ref={mainRef}
         className="mx-auto w-full max-w-2xl flex-1 px-4 py-4 pb-20"
-        style={{ touchAction: "pan-y" }}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
+        style={{ touchAction: "pan-y", overscrollBehaviorX: "none" }}
       >
         <Outlet />
       </main>
