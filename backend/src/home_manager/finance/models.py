@@ -1,10 +1,12 @@
 import uuid
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -17,6 +19,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from home_manager.db.base import Base
 from home_manager.db.types import utcnow
+
+
+class SubscriptionCadence(StrEnum):
+    MONTHLY = "monthly"
+    YEARLY = "yearly"
 
 
 class Income(Base):
@@ -75,6 +82,11 @@ class Subscription(Base):
             "payment_day >= 1 AND payment_day <= 31",
             name="ck_finance_subscriptions_payment_day_valid",
         ),
+        CheckConstraint(
+            "(cadence = 'MONTHLY' AND payment_month IS NULL) "
+            "OR (cadence = 'YEARLY' AND payment_month BETWEEN 1 AND 12)",
+            name="ck_finance_subscriptions_payment_month_matches_cadence",
+        ),
         Index("ix_finance_subscriptions_tenant_active", "tenant_id", "active"),
     )
 
@@ -87,7 +99,15 @@ class Subscription(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    cadence: Mapped[SubscriptionCadence] = mapped_column(
+        Enum(SubscriptionCadence, name="finance_subscription_cadence", native_enum=True),
+        nullable=False,
+        default=SubscriptionCadence.MONTHLY,
+    )
     payment_day: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Only set (and required) when cadence is yearly — which month the
+    # once-a-year charge falls in. Null for monthly subscriptions.
+    payment_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
     owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from home_manager.auth.models import User
 from home_manager.core.errors import AppError
-from home_manager.finance.models import Income, Subscription
+from home_manager.finance.models import Income, Subscription, SubscriptionCadence
 from home_manager.finance.schemas import (
     IncomeCreate,
     IncomeUpdate,
@@ -38,6 +38,21 @@ class InvalidSubscriptionOwnerError(AppError):
     code = "INVALID_SUBSCRIPTION_OWNER"
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     message = "owner_user_id must be a member of the same household"
+
+
+class InvalidSubscriptionCadenceError(AppError):
+    code = "INVALID_SUBSCRIPTION_CADENCE"
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    message = (
+        "payment_month is required for yearly subscriptions and must be unset for monthly ones"
+    )
+
+
+def _validate_cadence(cadence: SubscriptionCadence, payment_month: int | None) -> None:
+    if cadence == SubscriptionCadence.YEARLY and payment_month is None:
+        raise InvalidSubscriptionCadenceError()
+    if cadence == SubscriptionCadence.MONTHLY and payment_month is not None:
+        raise InvalidSubscriptionCadenceError()
 
 
 async def _resolve_income_user(
@@ -155,7 +170,9 @@ async def create_subscription(
         created_by=creator_id,
         name=payload.name,
         amount=payload.amount,
+        cadence=payload.cadence,
         payment_day=payload.payment_day,
+        payment_month=payload.payment_month,
         owner_user_id=payload.owner_user_id,
     )
     session.add(subscription)
@@ -212,6 +229,11 @@ async def update_subscription(
         await _validate_subscription_owner(
             session, tenant_id=tenant_id, requested=updates["owner_user_id"]
         )
+
+    if "cadence" in updates or "payment_month" in updates:
+        new_cadence = updates.get("cadence", subscription.cadence)
+        new_payment_month = updates.get("payment_month", subscription.payment_month)
+        _validate_cadence(new_cadence, new_payment_month)
 
     for field, value in updates.items():
         setattr(subscription, field, value)

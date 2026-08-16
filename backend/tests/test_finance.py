@@ -311,6 +311,113 @@ async def test_list_subscriptions_active_only_filters_inactive(
 
 
 @pytest.mark.asyncio
+async def test_create_yearly_subscription_requires_payment_month(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/finance/subscriptions",
+        json={"name": "Domain renewal", "amount": "12.00", "payment_day": 5, "cadence": "yearly"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_monthly_subscription_rejects_payment_month(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/finance/subscriptions",
+        json={
+            "name": "Netflix",
+            "amount": "15.99",
+            "payment_day": 5,
+            "cadence": "monthly",
+            "payment_month": 3,
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_yearly_subscription(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/finance/subscriptions",
+        json={
+            "name": "Domain renewal",
+            "amount": "12.00",
+            "payment_day": 5,
+            "cadence": "yearly",
+            "payment_month": 3,
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["cadence"] == "yearly"
+    assert body["payment_month"] == 3
+
+
+@pytest.mark.asyncio
+async def test_update_subscription_fields(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    create_response = await client.post(
+        "/api/v1/finance/subscriptions",
+        json={"name": "Netflix", "amount": "15.99", "payment_day": 15},
+        headers=_auth_headers(owner),
+    )
+    subscription_id = create_response.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/finance/subscriptions/{subscription_id}",
+        json={"name": "Netflix Premium", "amount": "19.99", "payment_day": 20},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["name"] == "Netflix Premium"
+    assert body["amount"] == "19.99"
+    assert body["payment_day"] == 20
+
+
+@pytest.mark.asyncio
+async def test_update_subscription_to_yearly_requires_payment_month(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    create_response = await client.post(
+        "/api/v1/finance/subscriptions",
+        json={"name": "Netflix", "amount": "15.99", "payment_day": 15},
+        headers=_auth_headers(owner),
+    )
+    subscription_id = create_response.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/finance/subscriptions/{subscription_id}",
+        json={"cadence": "yearly"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_SUBSCRIPTION_CADENCE"
+
+
+@pytest.mark.asyncio
 async def test_delete_subscription(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

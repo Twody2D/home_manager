@@ -210,12 +210,16 @@ export interface IncomeListResponse {
   offset: number;
 }
 
+export type SubscriptionCadence = "monthly" | "yearly";
+
 export interface Subscription {
   id: string;
   tenant_id: string;
   name: string;
   amount: string;
+  cadence: SubscriptionCadence;
   payment_day: number;
+  payment_month: number | null;
   owner_user_id: string | null;
   active: boolean;
   created_by: string | null;
@@ -226,7 +230,9 @@ export interface Subscription {
 export interface SubscriptionCreateInput {
   name: string;
   amount: string;
+  cadence?: SubscriptionCadence;
   payment_day: number;
+  payment_month?: number | null;
   owner_user_id?: string | null;
 }
 
