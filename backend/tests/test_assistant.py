@@ -584,3 +584,268 @@ async def test_empty_message_is_rejected(
     )
 
     assert response.status_code == 422
+
+
+# --- Finance intents ---------------------------------------------------------
+
+
+async def _invite_member(client: AsyncClient, owner: dict, **overrides: str) -> dict:
+    payload = {
+        "email": "lena@example.com",
+        "display_name": "Лена",
+        "password": "correct-horse-battery-staple",
+        **overrides,
+    }
+    response = await client.post("/api/v1/users", json=payload, headers=_auth_headers(owner))
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+@pytest.mark.asyncio
+async def test_income_message_creates_income_for_speaker_when_person_omitted(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={"message": "income: label=Salary amount=3000 day=25"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "salary" in body["reply"].lower() or "3000" in body["reply"]
+
+    incomes = await client.get("/api/v1/finance/incomes", headers=_auth_headers(owner))
+    items = incomes.json()["items"]
+    assert len(items) == 1
+    assert items[0]["user_id"] == owner["user"]["id"]
+    assert items[0]["amount"] == "3000.00"
+    assert items[0]["payment_day"] == 25
+
+
+@pytest.mark.asyncio
+async def test_income_message_with_named_person_resolves_to_household_member(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    lena = await _invite_member(client, owner)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={"message": "income: label=Salary amount=2500 day=25 person=Лены"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    incomes = await client.get("/api/v1/finance/incomes", headers=_auth_headers(owner))
+    items = incomes.json()["items"]
+    assert len(items) == 1
+    assert items[0]["user_id"] == lena["id"]
+
+
+@pytest.mark.asyncio
+async def test_income_message_with_unrecognized_person_defaults_to_speaker(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    await _invite_member(client, owner)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={"message": "income: label=Salary amount=1000 day=1 person=Джон"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    incomes = await client.get("/api/v1/finance/incomes", headers=_auth_headers(owner))
+    items = incomes.json()["items"]
+    assert items[0]["user_id"] == owner["user"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_subscription_message_creates_subscription(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": "subscription: name=Netflix amount=599 kind=subscription "
+            "cadence=monthly day=15"
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    assert "netflix" in response.json()["reply"].lower()
+
+    subs = await client.get("/api/v1/finance/subscriptions", headers=_auth_headers(owner))
+    items = subs.json()["items"]
+    assert len(items) == 1
+    assert items[0]["kind"] == "subscription"
+    assert items[0]["owner_user_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_subscription_message_creates_recurring_expense_not_subscription(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": "subscription: name=Аренда_квартиры amount=45000 "
+            "kind=recurring_expense cadence=monthly day=1"
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    subs = await client.get("/api/v1/finance/subscriptions", headers=_auth_headers(owner))
+    items = subs.json()["items"]
+    assert len(items) == 1
+    assert items[0]["kind"] == "recurring_expense"
+
+
+@pytest.mark.asyncio
+async def test_subscription_message_yearly_with_month(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": "subscription: name=Domain amount=1200 kind=recurring_expense "
+            "cadence=yearly day=1 month=3"
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    subs = await client.get("/api/v1/finance/subscriptions", headers=_auth_headers(owner))
+    items = subs.json()["items"]
+    assert items[0]["cadence"] == "yearly"
+    assert items[0]["payment_month"] == 3
+
+
+@pytest.mark.asyncio
+async def test_subscription_message_yearly_without_month_is_unknown(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": "subscription: name=Domain amount=1200 kind=recurring_expense "
+            "cadence=yearly day=1"
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    subs = await client.get("/api/v1/finance/subscriptions", headers=_auth_headers(owner))
+    assert subs.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_income_message_without_day_defaults_to_25(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={"message": "income-no-day: label=Salary amount=3000"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    incomes = await client.get("/api/v1/finance/incomes", headers=_auth_headers(owner))
+    items = incomes.json()["items"]
+    assert len(items) == 1
+    assert items[0]["payment_day"] == 25
+
+
+@pytest.mark.asyncio
+async def test_subscription_message_without_day_defaults_to_1(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": "subscription-no-day: name=Netflix amount=599 kind=subscription "
+            "cadence=monthly"
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    subs = await client.get("/api/v1/finance/subscriptions", headers=_auth_headers(owner))
+    items = subs.json()["items"]
+    assert len(items) == 1
+    assert items[0]["payment_day"] == 1
+
+
+@pytest.mark.asyncio
+async def test_finance_summary_message_when_empty(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={"message": "finance-summary", "locale": "ru"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    assert "пока не внесены" in response.json()["reply"]
+
+
+@pytest.mark.asyncio
+async def test_finance_summary_message_reports_totals(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    await client.post(
+        "/api/v1/finance/incomes",
+        json={"label": "Salary", "amount": "3000.00", "payment_day": 25},
+        headers=_auth_headers(owner),
+    )
+    await client.post(
+        "/api/v1/finance/subscriptions",
+        json={"name": "Netflix", "amount": "600.00", "payment_day": 15},
+        headers=_auth_headers(owner),
+    )
+    await client.post(
+        "/api/v1/finance/subscriptions",
+        json={
+            "name": "Rent",
+            "amount": "1000.00",
+            "payment_day": 1,
+            "kind": "recurring_expense",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={"message": "finance-summary", "locale": "ru"},
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    reply = response.json()["reply"]
+    # income 3000 - subscriptions 600 - recurring 1000 = 1400 left over.
+    assert "3000.00" in reply
+    assert "600.00" in reply
+    assert "1000.00" in reply
+    assert "1400.00" in reply

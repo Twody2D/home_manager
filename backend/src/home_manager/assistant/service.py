@@ -2,6 +2,7 @@ import json
 import re
 import uuid
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,16 +11,24 @@ from home_manager.ai.provider import LLMProvider
 from home_manager.assistant.schemas import (
     AssistantIntent,
     AssistantReply,
+    CreateIncomeIntent,
     CreateScheduleIntent,
+    CreateSubscriptionIntent,
     CreateTaskIntent,
+    QueryFinanceSummaryIntent,
     RotationSchedulePattern,
     ScheduleEventItem,
     SchedulePattern,
     UnknownIntent,
 )
+from home_manager.auth.models import User
 from home_manager.calendar.schemas import CalendarEventCreate
+from home_manager.finance import service as finance_service
+from home_manager.finance.models import SubscriptionCadence, SubscriptionKind
+from home_manager.finance.schemas import IncomeCreate, SubscriptionCreate
 from home_manager.tasks import service as tasks_service
 from home_manager.tasks.schemas import TaskCreate
+from home_manager.users import service as users_service
 
 
 def _parse_client_now(client_now: str | None) -> tuple[datetime, str]:
@@ -71,7 +80,43 @@ def _build_system_prompt(now: datetime) -> str:
         f"{_build_date_lookup_table(now)}\n"
         'To create a single task: {"intent": "create_task", "title": "...", '
         '"duration_minutes": <int or null>}\n'
-        "For calendar entries, use whichever of these three shapes fits the request:\n"
+        "IMPORTANT — if the message is about MONEY (зарплата/salary, доход/income, "
+        "подписка/subscription, аренда/rent, коммуналка/счётчики/utilities, or any "
+        "regular payment), it is NEVER create_task and NEVER create_schedule, even if it "
+        'mentions a day of the month — use ONE of these three shapes instead:\n'
+        'M1) Someone receives regular money (a salary/income): {"intent": "create_income", '
+        '"label": "...", "amount": <number>, "payment_day": <1-31>, "person": "<name>" or '
+        'null}. person is null when the message is about the speaker\'s own money ("я '
+        'получаю", "моя зарплата", "у меня") or names no one; set it ONLY when a specific '
+        'household member is named. No day mentioned → use 25. Example — "Лена получает '
+        '30000 25 числа" → {"intent": "create_income", "label": "Зарплата", "amount": 30000, '
+        '"payment_day": 25, "person": "Лена"}. Example — "я получаю зарплату 45000 25 числа" '
+        '→ {"intent": "create_income", "label": "Зарплата", "amount": 45000, "payment_day": '
+        '25, "person": null}.\n'
+        'M2) A subscription or a household bill (rent/utilities) recurs: {"intent": '
+        '"create_subscription", "name": "...", "amount": <number>, "kind": "subscription" or '
+        '"recurring_expense", "cadence": "monthly" or "yearly", "payment_day": <1-31>, '
+        '"payment_month": <1-12> (ONLY if cadence is "yearly", otherwise omit), "owner": '
+        '"<name>" or null}. kind="subscription" is a named service (Netflix, Spotify, gym) — '
+        'kind="recurring_expense" is a household bill that is not a named service (rent, '
+        'utilities, electricity, water, internet, mortgage, insurance, "аренда", "коммуналка", '
+        '"счётчики"). Rent and utilities are ALWAYS "recurring_expense", never "subscription". '
+        'owner stays null unless a specific person\'s name is given — do not default it to the '
+        'speaker. No day mentioned → use 1. Example — "добавь аренду квартиры 45000 в месяц, '
+        'плачу 1 числа" → {"intent": "create_subscription", "name": "Аренда квартиры", '
+        '"amount": 45000, "kind": "recurring_expense", "cadence": "monthly", "payment_day": 1, '
+        '"owner": null}. Example — "подписка Нетфликс 599 в месяц 15 числа" → {"intent": '
+        '"create_subscription", "name": "Netflix", "amount": 599, "kind": "subscription", '
+        '"cadence": "monthly", "payment_day": 15, "owner": null}. Example — "раз в год плачу '
+        'за домен 1200 в марте" → {"intent": "create_subscription", "name": "Домен", "amount": '
+        '1200, "kind": "recurring_expense", "cadence": "yearly", "payment_month": 3, '
+        '"payment_day": 1, "owner": null}.\n'
+        'M3) A question about total household money (how much income/subscriptions/left over) '
+        '— never compute it yourself, just recognize the question: {"intent": '
+        '"query_finance_summary"}. Example — "сколько мы тратим на подписки" or "какой у нас '
+        'доход" or "сколько денег остаётся" → {"intent": "query_finance_summary"}.\n'
+        "For calendar entries (work/sleep/sport/trip/personal schedules — NOT money), use "
+        "whichever of these three shapes fits the request:\n"
         '1) A repeating weekday pattern over a date range (e.g. "work Mon-Fri this month", '
         '"every weekday in August", "off Sat/Sun for the next 2 weeks") — do NOT enumerate '
         "every date yourself, reply with the pattern instead and let the range stand for "
@@ -122,6 +167,8 @@ def _build_system_prompt(now: datetime) -> str:
         "doesn't say what time the shift starts and ends, do not guess a time and do not use "
         'any of the three shapes above; reply {"intent": "unknown", "raw_message": "<the '
         'original message>"} instead so they can be asked for it.\n'
+        "Money math (totals, remaining budget) is always computed by the backend — you never "
+        "do arithmetic yourself, only extract the numbers named in the message.\n"
         'Otherwise: {"intent": "unknown", "raw_message": "<the original message>"}'
     )
 
@@ -272,6 +319,51 @@ def _is_missing_time_error(exc: ValidationError) -> bool:
     )
 
 
+def _is_missing_field_error(exc: ValidationError, field: str) -> bool:
+    """True when validation failed only because a single named field was
+    missing — as opposed to some other malformed field.
+    """
+    errors = exc.errors()
+    return bool(errors) and all(
+        error["type"] == "missing" and error["loc"][-1] == field for error in errors
+    )
+
+
+def _names_match(mentioned: str, member_name: str) -> bool:
+    """Loose name match tolerant of Russian grammatical case endings.
+
+    A model asked to echo a name back from the message may return any case
+    form ("Лена"/"Лены"/"Лене"/"Лену") depending on how the sentence was
+    phrased — comparing full strings would miss all but the nominative
+    case. Comparing a shared stem (member name minus its last couple of
+    letters) catches the common cases without a full morphology library.
+    """
+    mentioned_norm = mentioned.strip().lower()
+    member_norm = member_name.strip().lower()
+    if not mentioned_norm or not member_norm:
+        return False
+    stem_len = max(3, len(member_norm) - 2)
+    return mentioned_norm[:stem_len] == member_norm[:stem_len]
+
+
+def _resolve_person(
+    members: list[User], mentioned: str | None, *, default_to_creator: bool, creator_id: uuid.UUID
+) -> uuid.UUID | None:
+    """Maps a name the LLM echoed back from the message to a real user_id.
+
+    Never trusts the LLM with an id directly — it only ever gets to name
+    someone, and this is the one place that name is resolved against the
+    household's actual members. No match falls back to the creator (income)
+    or stays unset (subscription owner), never to a guess at who else it
+    might have meant.
+    """
+    if mentioned is not None:
+        for member in members:
+            if _names_match(mentioned, member.display_name):
+                return member.id
+    return creator_id if default_to_creator else None
+
+
 async def interpret_message(
     provider: LLMProvider, message: str, *, client_now: str | None = None
 ) -> AssistantIntent:
@@ -310,6 +402,33 @@ async def interpret_message(
         if _has_degenerate_time(schedule_intent) or not _message_mentions_time(message):
             return UnknownIntent(raw_message=message, reason="missing_time")
         return schedule_intent
+    if intent_name == "create_income":
+        try:
+            return CreateIncomeIntent.model_validate(data)
+        except ValidationError as exc:
+            # The prompt tells the model to default to day 25 when the
+            # message doesn't give one, but small models don't reliably
+            # follow that — omitting the field entirely rather than filling
+            # in the default is more common, so apply it here instead of
+            # asking the user for something the prompt already answered.
+            if _is_missing_field_error(exc, "payment_day"):
+                try:
+                    return CreateIncomeIntent.model_validate({**data, "payment_day": 25})
+                except ValidationError:
+                    pass
+            return UnknownIntent(raw_message=message)
+    if intent_name == "create_subscription":
+        try:
+            return CreateSubscriptionIntent.model_validate(data)
+        except ValidationError as exc:
+            if _is_missing_field_error(exc, "payment_day"):
+                try:
+                    return CreateSubscriptionIntent.model_validate({**data, "payment_day": 1})
+                except ValidationError:
+                    pass
+            return UnknownIntent(raw_message=message)
+    if intent_name == "query_finance_summary":
+        return QueryFinanceSummaryIntent()
 
     return UnknownIntent(raw_message=message)
 
@@ -334,6 +453,14 @@ _REPLY_TEXT = {
             "Looks like a schedule, but I couldn't find a start and end time — add one, "
             'e.g. "from 9 to 18", and try again.'
         ),
+        "income_added": 'Added income "{label}" — {amount} on day {day} of the month.',
+        "subscription_added": 'Added subscription "{name}" — {amount}.',
+        "recurring_expense_added": 'Added recurring expense "{name}" — {amount}.',
+        "finance_summary": (
+            "Monthly income: {income}. Subscriptions: {subscriptions}. "
+            "Recurring expenses: {recurring}. Left over: {remaining}."
+        ),
+        "finance_summary_empty": "No income, subscriptions, or recurring expenses recorded yet.",
     },
     "ru": {
         "task_added": "Добавил «{title}» в задачи.",
@@ -349,6 +476,14 @@ _REPLY_TEXT = {
             "Похоже на график, но не нашёл время начала и окончания — добавьте, например, "
             "«с 9 до 18», и попробуйте снова."
         ),
+        "income_added": "Добавил доход «{label}» — {amount}, {day} числа.",
+        "subscription_added": "Добавил подписку «{name}» — {amount}.",
+        "recurring_expense_added": "Добавил регулярный расход «{name}» — {amount}.",
+        "finance_summary": (
+            "Доход в месяц: {income}. Подписки: {subscriptions}. "
+            "Регулярные расходы: {recurring}. Остаётся: {remaining}."
+        ),
+        "finance_summary_empty": "Доходы, подписки и регулярные расходы пока не внесены.",
     },
 }
 
@@ -377,6 +512,10 @@ _EVENT_TYPE_LABELS = {
 def _reply_text(locale: str, key: str, **kwargs: object) -> str:
     lang = locale if locale in _REPLY_TEXT else "en"
     return _REPLY_TEXT[lang][key].format(**kwargs)
+
+
+def _format_amount(amount: object) -> str:
+    return f"{Decimal(str(amount)):.2f} ₽"
 
 
 def _default_schedule_title(event_type: str, locale: str, *, workplace: str | None = None) -> str:
@@ -526,6 +665,120 @@ async def execute_intent(
         return AssistantReply(
             reply=_reply_text(locale, "schedule_proposed", count=len(items)),
             proposed_events=items,
+        )
+
+    if isinstance(intent, CreateIncomeIntent):
+        members = await users_service.list_members(session, tenant_id=tenant_id)
+        target_user_id = _resolve_person(
+            members, intent.person, default_to_creator=True, creator_id=user_id
+        )
+        assert target_user_id is not None  # default_to_creator=True guarantees this
+        income = await finance_service.create_income(
+            session,
+            tenant_id=tenant_id,
+            creator_id=user_id,
+            payload=IncomeCreate(
+                user_id=target_user_id,
+                label=intent.label,
+                amount=intent.amount,
+                payment_day=intent.payment_day,
+            ),
+        )
+        await session.commit()
+        return AssistantReply(
+            reply=_reply_text(
+                locale,
+                "income_added",
+                label=income.label,
+                amount=_format_amount(income.amount),
+                day=income.payment_day,
+            ),
+            task_id=None,
+        )
+
+    if isinstance(intent, CreateSubscriptionIntent):
+        members = await users_service.list_members(session, tenant_id=tenant_id)
+        owner_id = _resolve_person(
+            members, intent.owner, default_to_creator=False, creator_id=user_id
+        )
+        subscription = await finance_service.create_subscription(
+            session,
+            tenant_id=tenant_id,
+            creator_id=user_id,
+            payload=SubscriptionCreate(
+                name=intent.name,
+                amount=intent.amount,
+                kind=intent.kind,
+                cadence=intent.cadence,
+                payment_day=intent.payment_day,
+                payment_month=intent.payment_month,
+                owner_user_id=owner_id,
+            ),
+        )
+        await session.commit()
+        reply_key = (
+            "recurring_expense_added"
+            if intent.kind == SubscriptionKind.RECURRING_EXPENSE
+            else "subscription_added"
+        )
+        return AssistantReply(
+            reply=_reply_text(
+                locale,
+                reply_key,
+                name=subscription.name,
+                amount=_format_amount(subscription.amount),
+            ),
+            task_id=None,
+        )
+
+    if isinstance(intent, QueryFinanceSummaryIntent):
+        incomes, _ = await finance_service.list_incomes(
+            session, tenant_id=tenant_id, limit=100, offset=0
+        )
+        subscriptions, _ = await finance_service.list_subscriptions(
+            session, tenant_id=tenant_id, active_only=True, limit=100, offset=0
+        )
+        if not incomes and not subscriptions:
+            return AssistantReply(reply=_reply_text(locale, "finance_summary_empty"), task_id=None)
+
+        def _monthly_equivalent(amount: object, cadence: SubscriptionCadence) -> Decimal:
+            # Normalized via str() rather than trusting the caller's static
+            # type — finance/models.py declares these Numeric columns as
+            # Mapped[float], but asyncpg actually hands back Decimal at
+            # runtime, and str() round-trips either one exactly.
+            value = Decimal(str(amount))
+            return value / 12 if cadence == SubscriptionCadence.YEARLY else value
+
+        total_income: Decimal = sum(
+            (Decimal(str(i.amount)) for i in incomes), Decimal("0")
+        )
+        total_subscriptions: Decimal = sum(
+            (
+                _monthly_equivalent(s.amount, s.cadence)
+                for s in subscriptions
+                if s.kind == SubscriptionKind.SUBSCRIPTION
+            ),
+            Decimal("0"),
+        )
+        total_recurring: Decimal = sum(
+            (
+                _monthly_equivalent(s.amount, s.cadence)
+                for s in subscriptions
+                if s.kind == SubscriptionKind.RECURRING_EXPENSE
+            ),
+            Decimal("0"),
+        )
+        remaining = total_income - total_subscriptions - total_recurring
+        return AssistantReply(
+            reply=_reply_text(
+                locale,
+                "finance_summary",
+                income=_format_amount(total_income),
+                subscriptions=_format_amount(total_subscriptions),
+                recurring=_format_amount(total_recurring),
+                remaining=_format_amount(remaining),
+            ),
+            task_id=None,
         )
 
     if isinstance(intent, UnknownIntent) and intent.reason == "missing_time":

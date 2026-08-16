@@ -1,11 +1,13 @@
 import re
 import uuid
+from decimal import Decimal
 from typing import Literal, Self
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from home_manager.calendar.models import CalendarEventType
 from home_manager.calendar.schemas import CalendarEventCreate
+from home_manager.finance.models import SubscriptionCadence, SubscriptionKind
 
 
 class CreateTaskIntent(BaseModel):
@@ -95,6 +97,45 @@ class CreateScheduleIntent(BaseModel):
         return self
 
 
+class CreateIncomeIntent(BaseModel):
+    intent: Literal["create_income"] = "create_income"
+    label: str = Field(min_length=1, max_length=100)
+    amount: Decimal = Field(gt=0)
+    payment_day: int = Field(ge=1, le=31)
+    # The household member's name as mentioned in the message ("Лена",
+    # "Паша"), or null when the message is about the speaker's own income
+    # ("я получаю", "моя зарплата") or doesn't name anyone — execute_intent
+    # resolves this to a real user_id server-side, defaulting to the
+    # speaker when null, the same way the Finance page's own form does.
+    person: str | None = Field(default=None, max_length=100)
+
+
+class CreateSubscriptionIntent(BaseModel):
+    intent: Literal["create_subscription"] = "create_subscription"
+    name: str = Field(min_length=1, max_length=100)
+    amount: Decimal = Field(gt=0)
+    kind: SubscriptionKind = SubscriptionKind.SUBSCRIPTION
+    cadence: SubscriptionCadence = SubscriptionCadence.MONTHLY
+    payment_day: int = Field(ge=1, le=31)
+    payment_month: int | None = Field(default=None, ge=1, le=12)
+    # Whose name it's under, as mentioned in the message — null when
+    # unspecified, which stays unspecified (a shared/household item), never
+    # defaults to the speaker (matches SubscriptionCreate.owner_user_id).
+    owner: str | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="after")
+    def _validate_payment_month(self) -> Self:
+        if self.cadence == SubscriptionCadence.YEARLY and self.payment_month is None:
+            raise ValueError("payment_month is required for a yearly subscription")
+        if self.cadence == SubscriptionCadence.MONTHLY and self.payment_month is not None:
+            raise ValueError("payment_month must not be set for a monthly subscription")
+        return self
+
+
+class QueryFinanceSummaryIntent(BaseModel):
+    intent: Literal["query_finance_summary"] = "query_finance_summary"
+
+
 class UnknownIntent(BaseModel):
     intent: Literal["unknown"] = "unknown"
     raw_message: str
@@ -104,7 +145,14 @@ class UnknownIntent(BaseModel):
     reason: Literal["missing_time"] | None = None
 
 
-AssistantIntent = CreateTaskIntent | CreateScheduleIntent | UnknownIntent
+AssistantIntent = (
+    CreateTaskIntent
+    | CreateScheduleIntent
+    | CreateIncomeIntent
+    | CreateSubscriptionIntent
+    | QueryFinanceSummaryIntent
+    | UnknownIntent
+)
 
 
 class AssistantMessageRequest(BaseModel):

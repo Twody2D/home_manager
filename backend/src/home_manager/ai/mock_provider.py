@@ -26,6 +26,27 @@ _ROTATION_RE = re.compile(
 # explicit trigger instead.
 _NO_TIME_SCHEDULE_PREFIX_RE = re.compile(r"^no-time-schedule\s*:\s*", re.IGNORECASE)
 _NO_TIME_SCHEDULE_RE = re.compile(r"(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<type>\w+)")
+_INCOME_PREFIX_RE = re.compile(r"^income\s*:\s*", re.IGNORECASE)
+_INCOME_RE = re.compile(
+    r"label=(?P<label>\S+)\s+amount=(?P<amount>[\d.]+)\s+day=(?P<day>\d+)"
+    r"(?:\s+person=(?P<person>\S+))?"
+)
+_SUBSCRIPTION_PREFIX_RE = re.compile(r"^subscription\s*:\s*", re.IGNORECASE)
+_SUBSCRIPTION_RE = re.compile(
+    r"name=(?P<name>\S+)\s+amount=(?P<amount>[\d.]+)\s+kind=(?P<kind>\S+)\s+"
+    r"cadence=(?P<cadence>\S+)\s+day=(?P<day>\d+)"
+    r"(?:\s+month=(?P<month>\d+))?(?:\s+owner=(?P<owner>\S+))?"
+)
+_FINANCE_SUMMARY_RE = re.compile(r"^finance-summary\s*$", re.IGNORECASE)
+# Test-only syntax for exercising the "model omitted payment_day" path —
+# mirrors _NO_TIME_SCHEDULE_RE's rationale above.
+_INCOME_NO_DAY_PREFIX_RE = re.compile(r"^income-no-day\s*:\s*", re.IGNORECASE)
+_INCOME_NO_DAY_RE = re.compile(r"label=(?P<label>\S+)\s+amount=(?P<amount>[\d.]+)")
+_SUBSCRIPTION_NO_DAY_PREFIX_RE = re.compile(r"^subscription-no-day\s*:\s*", re.IGNORECASE)
+_SUBSCRIPTION_NO_DAY_RE = re.compile(
+    r"name=(?P<name>\S+)\s+amount=(?P<amount>[\d.]+)\s+kind=(?P<kind>\S+)\s+"
+    r"cadence=(?P<cadence>\S+)"
+)
 
 
 class MockLLMProvider:
@@ -46,7 +67,63 @@ class MockLLMProvider:
         lowered = text.lower()
         payload: dict[str, object]
 
-        if _ROTATION_PREFIX_RE.match(text):
+        if _FINANCE_SUMMARY_RE.match(text):
+            payload = {"intent": "query_finance_summary"}
+        elif _INCOME_NO_DAY_PREFIX_RE.match(text):
+            rest = _INCOME_NO_DAY_PREFIX_RE.sub("", text)
+            m = _INCOME_NO_DAY_RE.search(rest)
+            if m:
+                payload = {
+                    "intent": "create_income",
+                    "label": m.group("label").replace("_", " "),
+                    "amount": float(m.group("amount")),
+                }
+            else:
+                payload = {"intent": "unknown", "raw_message": text}
+        elif _SUBSCRIPTION_NO_DAY_PREFIX_RE.match(text):
+            rest = _SUBSCRIPTION_NO_DAY_PREFIX_RE.sub("", text)
+            m = _SUBSCRIPTION_NO_DAY_RE.search(rest)
+            if m:
+                payload = {
+                    "intent": "create_subscription",
+                    "name": m.group("name").replace("_", " "),
+                    "amount": float(m.group("amount")),
+                    "kind": m.group("kind"),
+                    "cadence": m.group("cadence"),
+                }
+            else:
+                payload = {"intent": "unknown", "raw_message": text}
+        elif _INCOME_PREFIX_RE.match(text):
+            rest = _INCOME_PREFIX_RE.sub("", text)
+            m = _INCOME_RE.search(rest)
+            if m:
+                payload = {
+                    "intent": "create_income",
+                    "label": m.group("label").replace("_", " "),
+                    "amount": float(m.group("amount")),
+                    "payment_day": int(m.group("day")),
+                    "person": m.group("person"),
+                }
+            else:
+                payload = {"intent": "unknown", "raw_message": text}
+        elif _SUBSCRIPTION_PREFIX_RE.match(text):
+            rest = _SUBSCRIPTION_PREFIX_RE.sub("", text)
+            m = _SUBSCRIPTION_RE.search(rest)
+            if m:
+                month = m.group("month")
+                payload = {
+                    "intent": "create_subscription",
+                    "name": m.group("name").replace("_", " "),
+                    "amount": float(m.group("amount")),
+                    "kind": m.group("kind"),
+                    "cadence": m.group("cadence"),
+                    "payment_day": int(m.group("day")),
+                    "payment_month": int(month) if month else None,
+                    "owner": m.group("owner"),
+                }
+            else:
+                payload = {"intent": "unknown", "raw_message": text}
+        elif _ROTATION_PREFIX_RE.match(text):
             rest = _ROTATION_PREFIX_RE.sub("", text)
             m = _ROTATION_RE.search(rest)
             if m:
