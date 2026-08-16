@@ -86,6 +86,12 @@ export function AssistantPage() {
     );
   }
 
+  function dismissProposedEvents(entryId: string) {
+    setHistory((prev) =>
+      prev.map((entry) => (entry.id === entryId ? { ...entry, proposedEvents: [] } : entry)),
+    );
+  }
+
   async function confirmProposedEvents(entryId: string) {
     const entry = history.find((e) => e.id === entryId);
     if (!entry?.proposedEvents || entry.proposedEvents.length === 0) return;
@@ -147,16 +153,26 @@ export function AssistantPage() {
                       </button>
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => void confirmProposedEvents(entry.id)}
-                    disabled={createEventsBulk.isPending}
-                    className="w-full rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-                  >
-                    {createEventsBulk.isPending
-                      ? t("calendar.bulk.submitting")
-                      : t("assistant.confirmSchedule", { count: entry.proposedEvents.length })}
-                  </button>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => void confirmProposedEvents(entry.id)}
+                      disabled={createEventsBulk.isPending}
+                      className="flex-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                    >
+                      {createEventsBulk.isPending
+                        ? t("calendar.bulk.submitting")
+                        : t("assistant.confirmSchedule", { count: entry.proposedEvents.length })}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => dismissProposedEvents(entry.id)}
+                      disabled={createEventsBulk.isPending}
+                      className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      {t("assistant.discardSchedule")}
+                    </button>
+                  </div>
                 </div>
               )}
 

@@ -1,9 +1,20 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { useRef } from "react";
+import type { TouchEvent } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth/useAuth";
 import { useHousehold, useMembers } from "../hooks/useMembers";
 import { householdTitle } from "../lib/householdTitle";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+
+// The tabs a horizontal swipe on the main content cycles through, in
+// on-screen order. Kept separate from the <nav> markup below so the swipe
+// handler doesn't have to reverse-engineer tab order from rendered DOM.
+const SWIPE_TABS = ["/", "/tasks", "/calendar", "/assistant", "/preferences"];
+const SWIPE_DISTANCE_THRESHOLD = 60;
+// Horizontal movement must dominate vertical by this ratio, or a mostly-
+// vertical scroll gesture would misfire as a tab swipe.
+const SWIPE_DIRECTION_RATIO = 1.5;
 
 export function AppShell() {
   const { user, logout } = useAuth();
@@ -11,6 +22,32 @@ export function AppShell() {
   const householdQuery = useHousehold();
   const membersQuery = useMembers();
   const title = householdTitle(householdQuery.data, membersQuery.data ?? []);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+
+  function handleTouchStart(event: TouchEvent) {
+    const touch = event.touches[0];
+    touchStart.current = { x: touch.clientX, y: touch.clientY };
+  }
+
+  function handleTouchEnd(event: TouchEvent) {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_DISTANCE_THRESHOLD) return;
+    if (Math.abs(dx) < Math.abs(dy) * SWIPE_DIRECTION_RATIO) return;
+
+    const currentIndex = SWIPE_TABS.indexOf(location.pathname);
+    if (currentIndex === -1) return;
+    const nextIndex = currentIndex + (dx < 0 ? 1 : -1);
+    if (nextIndex < 0 || nextIndex >= SWIPE_TABS.length) return;
+    navigate(SWIPE_TABS[nextIndex]);
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
@@ -31,7 +68,12 @@ export function AppShell() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-4 pb-20">
+      <main
+        className="mx-auto w-full max-w-2xl flex-1 px-4 py-4 pb-20"
+        style={{ touchAction: "pan-y" }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         <Outlet />
       </main>
 
@@ -40,7 +82,6 @@ export function AppShell() {
           <NavTab to="/" label={t("nav.today")} icon={TodayIcon} />
           <NavTab to="/tasks" label={t("nav.tasks")} icon={TasksIcon} />
           <NavTab to="/calendar" label={t("nav.calendar")} icon={CalendarIcon} />
-          <NavTab to="/devices" label={t("nav.devices")} icon={DevicesIcon} />
           <NavTab to="/assistant" label={t("nav.assistant")} icon={AssistantIcon} />
           <NavTab to="/preferences" label={t("nav.preferences")} icon={PreferencesIcon} />
         </div>
@@ -90,15 +131,6 @@ function CalendarIcon({ className }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
       <rect x="3" y="4" width="18" height="17" rx="2" />
       <path d="M3 9h18M8 2v4M16 2v4M8 14h.01M12 14h.01M16 14h.01" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function DevicesIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
-      <rect x="4" y="2" width="16" height="20" rx="2" />
-      <path d="M9 18h6" strokeLinecap="round" />
     </svg>
   );
 }

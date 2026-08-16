@@ -105,7 +105,7 @@ export function QuickAddEventForm({ date, partner, isSubmitting, onSubmit }: Qui
             onChange={(e) => setShared(e.target.checked)}
             className="h-3.5 w-3.5 rounded border-slate-300"
           />
-          {t("calendar.quickAdd.sharedWith", { name: partner.display_name })}
+          {t("calendar.quickAdd.shared")}
         </label>
       )}
     </form>

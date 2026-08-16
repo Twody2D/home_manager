@@ -63,22 +63,45 @@ class SchedulePattern(BaseModel):
         return value
 
 
+class RotationSchedulePattern(BaseModel):
+    """An N-days-on / M-days-off rotating shift over a date range (e.g. a
+    "2/2" or "3/3" schedule) — distinct from SchedulePattern, whose weekday
+    list can't express a cycle that isn't aligned to the calendar week.
+    Expanded the same deterministic way as the calendar page's own
+    rotation-mode bulk generator (see BulkScheduleForm.tsx's handleGenerate).
+    """
+
+    work_days: int = Field(ge=1, le=31)
+    off_days: int = Field(ge=0, le=31)
+    date_from: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    date_to: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    start_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+    end_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+    event_type: CalendarEventType
+    title: str | None = Field(default=None, max_length=200)
+
+
 class CreateScheduleIntent(BaseModel):
     intent: Literal["create_schedule"] = "create_schedule"
     # Bounded the same as the calendar bulk-create endpoint it feeds into.
     events: list[ScheduleEventItem] = Field(default_factory=list, max_length=60)
     pattern: SchedulePattern | None = None
+    rotation: RotationSchedulePattern | None = None
 
     @model_validator(mode="after")
     def _require_events_or_pattern(self) -> Self:
-        if not self.events and self.pattern is None:
-            raise ValueError("create_schedule requires events or a pattern")
+        if not self.events and self.pattern is None and self.rotation is None:
+            raise ValueError("create_schedule requires events, a pattern, or a rotation")
         return self
 
 
 class UnknownIntent(BaseModel):
     intent: Literal["unknown"] = "unknown"
     raw_message: str
+    # Set when the model attempted create_schedule but omitted a required
+    # time field — lets execute_intent give a specific "you forgot the
+    # time" reply instead of the generic unknown-intent one.
+    reason: Literal["missing_time"] | None = None
 
 
 AssistantIntent = CreateTaskIntent | CreateScheduleIntent | UnknownIntent

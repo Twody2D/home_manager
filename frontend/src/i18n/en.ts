@@ -86,7 +86,7 @@ export const en = {
     viewAll: "Everyone",
     viewMine: "Mine",
     quickAdd: {
-      sharedWith: "Also add for {{name}}",
+      shared: "Shared event",
     },
     grid: {
       prevMonth: "Previous month",
@@ -253,6 +253,7 @@ export const en = {
     send: "Send",
     error: "Something went wrong reaching the assistant. Please try again.",
     confirmSchedule: "Add to calendar ({{count}})",
+    discardSchedule: "Discard",
     scheduleSaved: "Added to your calendar.",
   },
   devices: {

@@ -12,6 +12,7 @@ from home_manager.assistant.schemas import (
     AssistantReply,
     CreateScheduleIntent,
     CreateTaskIntent,
+    RotationSchedulePattern,
     ScheduleEventItem,
     SchedulePattern,
     UnknownIntent,
@@ -70,7 +71,7 @@ def _build_system_prompt(now: datetime) -> str:
         f"{_build_date_lookup_table(now)}\n"
         'To create a single task: {"intent": "create_task", "title": "...", '
         '"duration_minutes": <int or null>}\n'
-        "For calendar entries, use whichever of these two shapes fits the request:\n"
+        "For calendar entries, use whichever of these three shapes fits the request:\n"
         '1) A repeating weekday pattern over a date range (e.g. "work Mon-Fri this month", '
         '"every weekday in August", "off Sat/Sun for the next 2 weeks") — do NOT enumerate '
         "every date yourself, reply with the pattern instead and let the range stand for "
@@ -81,10 +82,13 @@ def _build_system_prompt(now: datetime) -> str:
         '"exclude_dates": ["YYYY-MM-DD", ...]}} '
         '(weekdays are ISO numbers: 1=Monday .. 7=Sunday). A range phrased as "Monday to '
         'Friday" (or "с понедельника по пятницу") is INCLUSIVE of both ends — that means '
-        "weekdays: [1,2,3,4,5], Friday included, not [1,2,3,4]. A schedule phrased as a ratio "
-        'like "5/2" or "2/2" with no other detail means a standard working week — treat "5/2" '
-        "as weekdays [1,2,3,4,5] (Mon-Fri) unless the user names specific different days off. "
-        '"weekend"/"выходные" means Saturday and Sunday ONLY — weekdays [6,7], never Friday. '
+        'weekdays: [1,2,3,4,5], Friday included, not [1,2,3,4]. "5/2" with no other detail '
+        "means a standard Mon-Fri working week — use shape 1 (pattern) with weekdays "
+        '[1,2,3,4,5]. Any OTHER N/M ratio ("2/2", "3/3", "4/2", ...) is a ROTATING shift '
+        "that repeats every (N+M) days regardless of the calendar week — that is shape 3 "
+        "below, never shape 1, since a fixed weekday list can't express a cycle that isn't "
+        'aligned to Monday. "weekend"/"выходные" means Saturday and Sunday ONLY — weekdays '
+        "[6,7], never Friday. "
         '"every day except the weekend" (or "каждый день кроме выходных") therefore means '
         "weekdays [1,2,3,4,5] with Friday included, same as Mon-Fri — do not drop Friday.\n"
         'Any date the user excludes ("except the 12th and 13th", "кроме 12 и 13") goes in '
@@ -103,6 +107,21 @@ def _build_system_prompt(now: datetime) -> str:
         '"end_time": "00:00", "event_type": "working_hours", "title": null}]}. Clock times only '
         'go up to "23:59" — midnight/end of day ("до 24", "до полуночи", "until midnight") is '
         'always written as end_time "00:00", never "24:00".\n'
+        '3) A rotating N-days-on/M-days-off shift ("2/2", "3/3", a ratio other than '
+        '"5/2") over a date range: {"intent": "create_schedule", "rotation": {"work_days": '
+        '<N>, "off_days": <M>, "date_from": "YYYY-MM-DD", "date_to": "YYYY-MM-DD", '
+        '"start_time": "HH:MM", "end_time": "HH:MM", "event_type": one of "working_hours"/'
+        '"sleep"/"meeting"/"sport"/"trip"/"personal"/"unavailable", "title": "..." or null}}. '
+        'date_from is the FIRST day of the FIRST work block (e.g. "starting from the 3rd" '
+        'means date_from is the 3rd, from the table above). Example — "работаю 2/2 весь '
+        'август начиная с 3го числа с 9 до 21" means: {"intent": "create_schedule", '
+        '"rotation": {"work_days": 2, "off_days": 2, "date_from": "<the 3rd, from the table '
+        'above, in August>", "date_to": "<the last day of August>", "start_time": "09:00", '
+        '"end_time": "21:00", "event_type": "working_hours", "title": null}}.\n'
+        "In all three shapes, start_time and end_time are REQUIRED — if the user's message "
+        "doesn't say what time the shift starts and ends, do not guess a time and do not use "
+        'any of the three shapes above; reply {"intent": "unknown", "raw_message": "<the '
+        'original message>"} instead so they can be asked for it.\n'
         'Otherwise: {"intent": "unknown", "raw_message": "<the original message>"}'
     )
 
@@ -168,6 +187,71 @@ def _fix_ordinal_day_mismatch(intent: CreateScheduleIntent, message: str) -> Non
             return
 
 
+_RATIO_RE = re.compile(r"\b(\d{1,2})\s*/\s*(\d{1,2})\b")
+
+
+def _fix_ratio_misclassified_as_workweek(intent: CreateScheduleIntent, message: str) -> None:
+    """Cloudflare's small model treats any "N/M" ratio as meaning a plain
+    Mon-Fri working week (shape 1), even when N/M isn't "5/2" — live testing
+    showed "2/2" coming back as {"pattern": {"weekdays": [1,2,3,4,5], ...}}
+    instead of the rotating shift (shape 3) it actually describes. When the
+    message names a ratio other than 5/2 and the model returned exactly a
+    full Mon-Fri pattern, convert it to the rotation it should have been —
+    the date range/time/event_type/title the model already got right carry
+    over unchanged, only the shape changes.
+    """
+    pattern = intent.pattern
+    if pattern is None or intent.rotation is not None:
+        return
+    match = _RATIO_RE.search(message)
+    if match is None:
+        return
+    work_days, off_days = int(match.group(1)), int(match.group(2))
+    if (work_days, off_days) == (5, 2):
+        return
+    if set(pattern.weekdays) != set(_FULL_WORKWEEK):
+        return
+    intent.rotation = RotationSchedulePattern(
+        work_days=work_days,
+        off_days=off_days,
+        date_from=pattern.date_from,
+        date_to=pattern.date_to,
+        start_time=pattern.start_time,
+        end_time=pattern.end_time,
+        event_type=pattern.event_type,
+        title=pattern.title,
+    )
+    intent.pattern = None
+
+
+def _has_degenerate_time(intent: CreateScheduleIntent) -> bool:
+    """True when a schedule/pattern/rotation's start and end time are
+    identical — never a legitimate shift (that's zero duration), and what
+    Cloudflare's small model fabricates when the message didn't actually
+    give a time and it guesses instead of asking, rather than the prompt's
+    instruction to reply "unknown" in that case. Checking this invariant
+    directly is more robust than trying to detect "no time in the message"
+    from the message text itself.
+    """
+    if intent.pattern is not None and intent.pattern.start_time == intent.pattern.end_time:
+        return True
+    if intent.rotation is not None and intent.rotation.start_time == intent.rotation.end_time:
+        return True
+    return bool(intent.events) and all(item.start_time == item.end_time for item in intent.events)
+
+
+def _is_missing_time_error(exc: ValidationError) -> bool:
+    """True when validation failed only because start_time/end_time was
+    missing (the model attempted a schedule but left out a required time),
+    as opposed to some other malformed field the user can't easily fix by
+    just adding a time.
+    """
+    return all(
+        error["type"] == "missing" and error["loc"][-1] in ("start_time", "end_time")
+        for error in exc.errors()
+    )
+
+
 async def interpret_message(
     provider: LLMProvider, message: str, *, client_now: str | None = None
 ) -> AssistantIntent:
@@ -197,10 +281,14 @@ async def interpret_message(
     if intent_name == "create_schedule":
         try:
             schedule_intent = CreateScheduleIntent.model_validate(data)
-        except ValidationError:
-            return UnknownIntent(raw_message=message)
+        except ValidationError as exc:
+            reason = "missing_time" if _is_missing_time_error(exc) else None
+            return UnknownIntent(raw_message=message, reason=reason)
         _fix_weekend_exclusion(schedule_intent, message)
         _fix_ordinal_day_mismatch(schedule_intent, message)
+        _fix_ratio_misclassified_as_workweek(schedule_intent, message)
+        if _has_degenerate_time(schedule_intent):
+            return UnknownIntent(raw_message=message, reason="missing_time")
         return schedule_intent
 
     return UnknownIntent(raw_message=message)
@@ -222,6 +310,10 @@ _REPLY_TEXT = {
             "Sorry, I didn't understand that. Try something like "
             '"create task: water the plants, 15 minutes", or describe your work schedule.'
         ),
+        "missing_time": (
+            "Looks like a schedule, but I couldn't find a start and end time — add one, "
+            'e.g. "from 9 to 18", and try again.'
+        ),
     },
     "ru": {
         "task_added": "Добавил «{title}» в задачи.",
@@ -232,6 +324,10 @@ _REPLY_TEXT = {
         "unknown": (
             "Не понял сообщение. Попробуйте что-то вроде «создай задачу: полить цветы, "
             "15 минут», или опишите свой рабочий график."
+        ),
+        "missing_time": (
+            "Похоже на график, но не нашёл время начала и окончания — добавьте, например, "
+            "«с 9 до 18», и попробуйте снова."
         ),
     },
 }
@@ -297,6 +393,35 @@ def _expand_pattern(pattern: SchedulePattern) -> list[ScheduleEventItem]:
     return items
 
 
+def _expand_rotation(pattern: RotationSchedulePattern) -> list[ScheduleEventItem]:
+    """Turns an N-on/M-off rotating pattern into one item per work day.
+
+    Mirrors BulkScheduleForm.tsx's handleGenerate (rotation mode) exactly:
+    day offset from date_from, modulo the cycle length, is a work day when
+    it falls in the first work_days of the cycle.
+    """
+    start = date.fromisoformat(pattern.date_from)
+    end = date.fromisoformat(pattern.date_to)
+    cycle_length = pattern.work_days + pattern.off_days
+    items: list[ScheduleEventItem] = []
+    if cycle_length <= 0:
+        return items
+    cursor = start
+    while cursor <= end:
+        if (cursor - start).days % cycle_length < pattern.work_days:
+            items.append(
+                ScheduleEventItem(
+                    date=cursor.isoformat(),
+                    start_time=pattern.start_time,
+                    end_time=pattern.end_time,
+                    event_type=pattern.event_type,
+                    title=pattern.title,
+                )
+            )
+        cursor += timedelta(days=1)
+    return items
+
+
 async def execute_intent(
     session: AsyncSession,
     *,
@@ -336,6 +461,8 @@ async def execute_intent(
             schedule_items = list(intent.events)
             if intent.pattern is not None:
                 schedule_items.extend(_expand_pattern(intent.pattern))
+            if intent.rotation is not None:
+                schedule_items.extend(_expand_rotation(intent.rotation))
 
             items: list[CalendarEventCreate] = []
             for item in schedule_items:
@@ -380,5 +507,8 @@ async def execute_intent(
             reply=_reply_text(locale, "schedule_proposed", count=len(items)),
             proposed_events=items,
         )
+
+    if isinstance(intent, UnknownIntent) and intent.reason == "missing_time":
+        return AssistantReply(reply=_reply_text(locale, "missing_time"), task_id=None)
 
     return AssistantReply(reply=_reply_text(locale, "unknown"), task_id=None)

@@ -88,7 +88,7 @@ export const ru: typeof en = {
     viewAll: "Общие",
     viewMine: "Мои",
     quickAdd: {
-      sharedWith: "Добавить и {{name}}",
+      shared: "Общее событие",
     },
     grid: {
       prevMonth: "Предыдущий месяц",
@@ -255,6 +255,7 @@ export const ru: typeof en = {
     send: "Отправить",
     error: "Не удалось связаться с ассистентом. Попробуйте ещё раз.",
     confirmSchedule: "Добавить в календарь ({{count}})",
+    discardSchedule: "Сбросить",
     scheduleSaved: "Добавлено в календарь.",
   },
   devices: {

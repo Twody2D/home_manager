@@ -15,6 +15,17 @@ _PATTERN_RE = re.compile(
     r"to=(?P<to>\d{4}-\d{2}-\d{2})\s+(?P<start>\d{2}:\d{2})-(?P<end>\d{2}:\d{2})\s+(?P<type>\w+)"
     r"(?:\s+exclude=(?P<exclude>[\d,-]+))?"
 )
+_ROTATION_PREFIX_RE = re.compile(r"^rotation\s*:\s*", re.IGNORECASE)
+_ROTATION_RE = re.compile(
+    r"work=(?P<work>\d+)\s+off=(?P<off>\d+)\s+from=(?P<from>\d{4}-\d{2}-\d{2})\s+"
+    r"to=(?P<to>\d{4}-\d{2}-\d{2})\s+(?P<start>\d{2}:\d{2})-(?P<end>\d{2}:\d{2})\s+(?P<type>\w+)"
+)
+# Test-only syntax for exercising the "model attempted a schedule but left
+# out the time" path — a real model just omits the fields, but the mock has
+# no free-form understanding to omit them "naturally" from, so this is an
+# explicit trigger instead.
+_NO_TIME_SCHEDULE_PREFIX_RE = re.compile(r"^no-time-schedule\s*:\s*", re.IGNORECASE)
+_NO_TIME_SCHEDULE_RE = re.compile(r"(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<type>\w+)")
 
 
 class MockLLMProvider:
@@ -33,13 +44,45 @@ class MockLLMProvider:
     async def complete(self, *, system_prompt: str, user_message: str) -> str:
         text = user_message.strip()
         lowered = text.lower()
+        payload: dict[str, object]
 
-        if _PATTERN_PREFIX_RE.match(text):
+        if _ROTATION_PREFIX_RE.match(text):
+            rest = _ROTATION_PREFIX_RE.sub("", text)
+            m = _ROTATION_RE.search(rest)
+            if m:
+                payload = {
+                    "intent": "create_schedule",
+                    "rotation": {
+                        "work_days": int(m.group("work")),
+                        "off_days": int(m.group("off")),
+                        "date_from": m.group("from"),
+                        "date_to": m.group("to"),
+                        "start_time": m.group("start"),
+                        "end_time": m.group("end"),
+                        "event_type": m.group("type"),
+                        "title": None,
+                    },
+                }
+            else:
+                payload = {"intent": "unknown", "raw_message": text}
+        elif _NO_TIME_SCHEDULE_PREFIX_RE.match(text):
+            rest = _NO_TIME_SCHEDULE_PREFIX_RE.sub("", text)
+            m = _NO_TIME_SCHEDULE_RE.search(rest)
+            if m:
+                payload = {
+                    "intent": "create_schedule",
+                    "events": [
+                        {"date": m.group("date"), "event_type": m.group("type"), "title": None}
+                    ],
+                }
+            else:
+                payload = {"intent": "unknown", "raw_message": text}
+        elif _PATTERN_PREFIX_RE.match(text):
             rest = _PATTERN_PREFIX_RE.sub("", text)
             m = _PATTERN_RE.search(rest)
             if m:
                 exclude = m.group("exclude")
-                payload: dict[str, object] = {
+                payload = {
                     "intent": "create_schedule",
                     "pattern": {
                         "weekdays": [int(d) for d in m.group("weekdays").split(",")],

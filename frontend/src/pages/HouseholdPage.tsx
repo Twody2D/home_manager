@@ -137,7 +137,7 @@ export function HouseholdPage() {
         <p className="text-sm text-slate-500">{t("household.noPartnerYet")}</p>
       )}
 
-      {isOwner && (
+      {isOwner && others.length === 0 && (
         <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
           <h2 className="text-sm font-semibold text-slate-900">{t("household.inviteTitle")}</h2>
           <p className="text-xs text-slate-500">{t("household.inviteIntro")}</p>

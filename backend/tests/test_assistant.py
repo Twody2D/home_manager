@@ -427,6 +427,133 @@ async def test_schedule_message_without_matching_ordinal_days_is_not_corrected(
 
 
 @pytest.mark.asyncio
+async def test_rotation_message_expands_work_off_cycle(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    # 2/2 starting 2026-08-03: work Aug 3-4, off 5-6, work 7-8, off 9-10, ...
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": (
+                "rotation: work=2 off=2 from=2026-08-03 to=2026-08-10 09:00-21:00 working_hours"
+            ),
+            "client_now": "2026-08-01T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    proposed = response.json()["proposed_events"]
+    dates = sorted(event["start_at"][:10] for event in proposed)
+    assert dates == ["2026-08-03", "2026-08-04", "2026-08-07", "2026-08-08"]
+
+
+@pytest.mark.asyncio
+async def test_schedule_message_without_time_gets_a_missing_time_reply(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": "no-time-schedule: 2026-08-11 working_hours",
+            "client_now": "2026-08-01T12:00:00+03:00",
+            "locale": "ru",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["task_id"] is None
+    assert body["proposed_events"] is None
+    assert "время" in body["reply"].lower()
+
+
+@pytest.mark.asyncio
+async def test_ratio_other_than_5_2_is_converted_from_workweek_to_rotation(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    # Live testing showed the model returning a plain Mon-Fri pattern for
+    # "2/2" instead of the rotating shift it actually describes — simulate
+    # that here (mock returns weekdays=[1,2,3,4,5], same as a real "2/2"
+    # misclassification) and confirm the "2/2" in the message text converts
+    # it to a rotation instead of leaving it as every weekday.
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": (
+                "pattern: weekdays=1,2,3,4,5 from=2026-08-03 to=2026-08-10 "
+                "09:00-21:00 working_hours работаю 2/2"
+            ),
+            "client_now": "2026-08-01T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    proposed = response.json()["proposed_events"]
+    dates = sorted(event["start_at"][:10] for event in proposed)
+    assert dates == ["2026-08-03", "2026-08-04", "2026-08-07", "2026-08-08"]
+
+
+@pytest.mark.asyncio
+async def test_ratio_5_2_stays_a_plain_workweek(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": (
+                "pattern: weekdays=1,2,3,4,5 from=2026-08-03 to=2026-08-07 "
+                "09:00-21:00 working_hours работаю 5/2"
+            ),
+            "client_now": "2026-08-01T12:00:00+03:00",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    proposed = response.json()["proposed_events"]
+    assert len(proposed) == 5
+
+
+@pytest.mark.asyncio
+async def test_identical_start_and_end_time_is_treated_as_missing_time(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    # A model that fabricates a time instead of admitting it has none tends
+    # to produce a zero-duration shift like this — never legitimate for a
+    # real shift, so it's treated as "no time given" rather than proposed.
+    response = await client.post(
+        "/api/v1/assistant/message",
+        json={
+            "message": (
+                "pattern: weekdays=1,2,3,4,5 from=2026-08-03 to=2026-08-07 "
+                "09:00-09:00 working_hours"
+            ),
+            "client_now": "2026-08-01T12:00:00+03:00",
+            "locale": "ru",
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["proposed_events"] is None
+    assert "время" in body["reply"].lower()
+
+
+@pytest.mark.asyncio
 async def test_empty_message_is_rejected(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:
