@@ -2,7 +2,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from home_manager.auth.models import Role
+from home_manager.auth.models import Gender, Role
 
 
 class RegisterRequest(BaseModel):
@@ -25,6 +25,7 @@ class UserResponse(BaseModel):
     email: EmailStr
     display_name: str
     role: Role
+    gender: Gender | None
 
 
 class TokenResponse(BaseModel):
