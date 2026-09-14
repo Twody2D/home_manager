@@ -22,6 +22,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.14-slim AS runtime
 
+# Pick up Debian's own security patches (gzip, perl, etc.) that land after
+# this base image tag was built — the image scanner flags whatever CVEs
+# were open at build time otherwise, even though a fix already exists.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 # The base image's own system pip/setuptools (from ensurepip) aren't used
 # at runtime at all - the app runs entirely out of the uv-managed .venv
 # copied in below - but they still sit in site-packages and get flagged by
