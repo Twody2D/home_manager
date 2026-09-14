@@ -27,6 +27,10 @@ export function listTasks(params: ListTasksParams = {}): Promise<TaskPageRespons
   return apiFetch(`/tasks${query ? `?${query}` : ""}`);
 }
 
+export function getTask(id: string): Promise<Task> {
+  return apiFetch(`/tasks/${id}`);
+}
+
 export function createTask(input: TaskCreateInput): Promise<Task> {
   return apiFetch("/tasks", { method: "POST", body: input });
 }
@@ -37,6 +41,16 @@ export function updateTask(id: string, input: TaskUpdateInput): Promise<Task> {
 
 export function deleteTask(id: string): Promise<void> {
   return apiFetch(`/tasks/${id}`, { method: "DELETE" });
+}
+
+export interface ReorderTasksInput {
+  list_id: string | null;
+  parent_task_id: string | null;
+  ordered_ids: string[];
+}
+
+export function reorderTasks(input: ReorderTasksInput): Promise<Task[]> {
+  return apiFetch("/tasks/reorder", { method: "PATCH", body: input });
 }
 
 export function listTaskLists(): Promise<TaskListsResponse> {

@@ -79,6 +79,7 @@ class TaskResponse(BaseModel):
     budget_owner_user_id: uuid.UUID | None
     list_id: uuid.UUID | None
     parent_task_id: uuid.UUID | None
+    order_index: int
     created_at: datetime
     updated_at: datetime
     completed_at: datetime | None
@@ -112,3 +113,14 @@ class TaskListResponse(BaseModel):
 
 class TaskListsResponse(BaseModel):
     items: list[TaskListResponse]
+
+
+class TaskReorderRequest(BaseModel):
+    """Reorders one sibling group at once — every task sharing the same
+    (list_id, parent_task_id) — rather than moving a single task to an
+    index, since drag-and-drop UIs already know the full resulting order
+    and this avoids any float/gap position math."""
+
+    list_id: uuid.UUID | None = None
+    parent_task_id: uuid.UUID | None = None
+    ordered_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)

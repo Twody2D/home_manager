@@ -139,6 +139,10 @@ class Task(Base):
     parent_task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
     )
+    # Manual sort position within a sibling group — same (tenant_id,
+    # list_id, parent_task_id) — for drag-and-drop reordering. Not globally
+    # unique; only compared within one sibling group at a time.
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

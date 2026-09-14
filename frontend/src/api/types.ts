@@ -46,6 +46,7 @@ export interface Task {
   budget_owner_user_id: string | null;
   list_id: string | null;
   parent_task_id: string | null;
+  order_index: number;
   created_at: string;
   updated_at: string;
   completed_at: string | null;

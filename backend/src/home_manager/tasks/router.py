@@ -17,6 +17,7 @@ from home_manager.tasks.schemas import (
     TaskListsResponse,
     TaskListUpdate,
     TaskPageResponse,
+    TaskReorderRequest,
     TaskResponse,
     TaskUpdate,
 )
@@ -72,6 +73,17 @@ async def list_tasks(
         limit=limit,
         offset=offset,
     )
+
+
+@router.patch("/reorder", response_model=list[TaskResponse])
+async def reorder_tasks(
+    payload: TaskReorderRequest, current_user: CurrentUser, session: DbSession
+) -> list[TaskResponse]:
+    # Registered before "/{task_id}" so "reorder" is never parsed as a
+    # task id.
+    tasks = await service.reorder_tasks(session, tenant_id=current_user.tenant_id, payload=payload)
+    await session.commit()
+    return [TaskResponse.model_validate(task) for task in tasks]
 
 
 @router.get("/{task_id}", response_model=TaskResponse)

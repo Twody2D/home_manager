@@ -12,6 +12,14 @@ export function useTasks(params: tasksApi.ListTasksParams = {}) {
   });
 }
 
+export function useTask(id: string | undefined) {
+  return useQuery({
+    queryKey: [...TASKS_KEY, "detail", id],
+    queryFn: () => tasksApi.getTask(id as string),
+    enabled: id !== undefined,
+  });
+}
+
 export function useCreateTask() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -37,6 +45,16 @@ export function useDeleteTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => tasksApi.deleteTask(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TASKS_KEY });
+    },
+  });
+}
+
+export function useReorderTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: tasksApi.ReorderTasksInput) => tasksApi.reorderTasks(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TASKS_KEY });
     },

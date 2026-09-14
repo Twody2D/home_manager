@@ -520,3 +520,159 @@ async def test_update_task_moves_between_lists(
     )
     assert response.status_code == 200
     assert response.json()["list_id"] == list_b.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_new_tasks_get_increasing_order_index(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+
+    first = await client.post("/api/v1/tasks", json={"title": "First"}, headers=headers)
+    second = await client.post("/api/v1/tasks", json={"title": "Second"}, headers=headers)
+    third = await client.post("/api/v1/tasks", json={"title": "Third"}, headers=headers)
+
+    assert first.json()["order_index"] == 0
+    assert second.json()["order_index"] == 1
+    assert third.json()["order_index"] == 2
+
+
+@pytest.mark.asyncio
+async def test_reorder_top_level_tasks(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+
+    a = await client.post("/api/v1/tasks", json={"title": "A"}, headers=headers)
+    b = await client.post("/api/v1/tasks", json={"title": "B"}, headers=headers)
+    c = await client.post("/api/v1/tasks", json={"title": "C"}, headers=headers)
+    a_id, b_id, c_id = a.json()["id"], b.json()["id"], c.json()["id"]
+
+    response = await client.patch(
+        "/api/v1/tasks/reorder",
+        json={"list_id": None, "parent_task_id": None, "ordered_ids": [c_id, a_id, b_id]},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [item["id"] for item in body] == [c_id, a_id, b_id]
+    assert [item["order_index"] for item in body] == [0, 1, 2]
+
+    listed = await client.get("/api/v1/tasks", headers=headers)
+    by_id = {item["id"]: item["order_index"] for item in listed.json()["items"]}
+    assert by_id == {c_id: 0, a_id: 1, b_id: 2}
+
+
+@pytest.mark.asyncio
+async def test_reorder_subtasks_independently_of_parent_group(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    parent = await client.post("/api/v1/tasks", json={"title": "Parent"}, headers=headers)
+    parent_id = parent.json()["id"]
+    child_a = await client.post(
+        "/api/v1/tasks", json={"title": "Child A", "parent_task_id": parent_id}, headers=headers
+    )
+    child_b = await client.post(
+        "/api/v1/tasks", json={"title": "Child B", "parent_task_id": parent_id}, headers=headers
+    )
+
+    response = await client.patch(
+        "/api/v1/tasks/reorder",
+        json={
+            "list_id": None,
+            "parent_task_id": parent_id,
+            "ordered_ids": [child_b.json()["id"], child_a.json()["id"]],
+        },
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert [item["id"] for item in response.json()] == [
+        child_b.json()["id"],
+        child_a.json()["id"],
+    ]
+
+
+@pytest.mark.asyncio
+async def test_reorder_rejects_partial_id_set(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    a = await client.post("/api/v1/tasks", json={"title": "A"}, headers=headers)
+    await client.post("/api/v1/tasks", json={"title": "B"}, headers=headers)
+
+    response = await client.patch(
+        "/api/v1/tasks/reorder",
+        json={"list_id": None, "parent_task_id": None, "ordered_ids": [a.json()["id"]]},
+        headers=headers,
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_REORDER"
+
+
+@pytest.mark.asyncio
+async def test_reorder_rejects_task_from_other_tenant(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner_a = await register_household(client, email="owner-a@example.com")
+    owner_b = await register_household(client, email="owner-b@example.com")
+    a1 = await client.post("/api/v1/tasks", json={"title": "A1"}, headers=_auth_headers(owner_a))
+    a2 = await client.post("/api/v1/tasks", json={"title": "A2"}, headers=_auth_headers(owner_a))
+    b1 = await client.post("/api/v1/tasks", json={"title": "B1"}, headers=_auth_headers(owner_b))
+
+    response = await client.patch(
+        "/api/v1/tasks/reorder",
+        json={
+            "list_id": None,
+            "parent_task_id": None,
+            "ordered_ids": [a1.json()["id"], b1.json()["id"]],
+        },
+        headers=_auth_headers(owner_a),
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_REORDER"
+
+    # Sanity: A's own two tasks still reorder fine, proving the rejection
+    # above was specifically about the foreign id, not a broken endpoint.
+    ok_response = await client.patch(
+        "/api/v1/tasks/reorder",
+        json={
+            "list_id": None,
+            "parent_task_id": None,
+            "ordered_ids": [a2.json()["id"], a1.json()["id"]],
+        },
+        headers=_auth_headers(owner_a),
+    )
+    assert ok_response.status_code == 200, ok_response.text
+
+
+@pytest.mark.asyncio
+async def test_reorder_scoped_to_correct_list(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    list_a = await client.post("/api/v1/task-lists", json={"name": "A"}, headers=headers)
+    list_id = list_a.json()["id"]
+    in_list = await client.post(
+        "/api/v1/tasks", json={"title": "In list", "list_id": list_id}, headers=headers
+    )
+    in_my_tasks = await client.post("/api/v1/tasks", json={"title": "My tasks"}, headers=headers)
+
+    # Trying to reorder a "My Tasks" task under list_id's group is rejected
+    # because it's not actually a member of that sibling group.
+    response = await client.patch(
+        "/api/v1/tasks/reorder",
+        json={
+            "list_id": list_id,
+            "parent_task_id": None,
+            "ordered_ids": [in_list.json()["id"], in_my_tasks.json()["id"]],
+        },
+        headers=headers,
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_REORDER"

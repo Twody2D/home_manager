@@ -8,6 +8,7 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { AcceptInvitePage } from "./pages/AcceptInvitePage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TasksPage } from "./pages/TasksPage";
+import { TaskDetailPage } from "./pages/TaskDetailPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { FinancePage } from "./pages/FinancePage";
 import { PreferencesPage } from "./pages/PreferencesPage";
@@ -33,6 +34,7 @@ export default function App() {
               <Route element={<AppShell />}>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/tasks" element={<TasksPage />} />
+                <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/finance" element={<FinancePage />} />
                 <Route path="/preferences" element={<PreferencesPage />} />

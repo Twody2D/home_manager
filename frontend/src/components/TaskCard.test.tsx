@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { TaskCard } from "./TaskCard";
 import type { Task } from "../api/types";
 
@@ -24,6 +25,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     budget_owner_user_id: null,
     list_id: null,
     parent_task_id: null,
+    order_index: 0,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     completed_at: null,
@@ -31,18 +33,37 @@ function makeTask(overrides: Partial<Task> = {}): Task {
   };
 }
 
+function renderCard(ui: React.ReactElement) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
+
 describe("TaskCard", () => {
-  it("renders the task title and priority", () => {
-    render(
-      <TaskCard task={makeTask()} onToggleComplete={() => {}} onDelete={() => {}} />,
-    );
+  it("renders the task title", () => {
+    renderCard(<TaskCard task={makeTask()} onToggleComplete={() => {}} onDelete={() => {}} />);
 
     expect(screen.getByText("Buy groceries")).toBeInTheDocument();
-    expect(screen.getByText("medium")).toBeInTheDocument();
+  });
+
+  it("hides the priority badge for the default (medium) priority", () => {
+    renderCard(<TaskCard task={makeTask()} onToggleComplete={() => {}} onDelete={() => {}} />);
+
+    expect(screen.queryByText("medium")).not.toBeInTheDocument();
+  });
+
+  it("shows the priority badge for a non-default priority", () => {
+    renderCard(
+      <TaskCard
+        task={makeTask({ priority: "high" })}
+        onToggleComplete={() => {}}
+        onDelete={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("high")).toBeInTheDocument();
   });
 
   it("shows completed tasks with strikethrough styling", () => {
-    render(
+    renderCard(
       <TaskCard
         task={makeTask({ status: "completed", completed_at: "2026-01-02T00:00:00Z" })}
         onToggleComplete={() => {}}
@@ -58,7 +79,7 @@ describe("TaskCard", () => {
     const onToggleComplete = vi.fn();
     const task = makeTask();
 
-    render(<TaskCard task={task} onToggleComplete={onToggleComplete} onDelete={() => {}} />);
+    renderCard(<TaskCard task={task} onToggleComplete={onToggleComplete} onDelete={() => {}} />);
     await user.click(screen.getByRole("button", { name: /mark as completed/i }));
 
     expect(onToggleComplete).toHaveBeenCalledWith(task);
@@ -69,14 +90,14 @@ describe("TaskCard", () => {
     const onDelete = vi.fn();
     const task = makeTask();
 
-    render(<TaskCard task={task} onToggleComplete={() => {}} onDelete={onDelete} />);
+    renderCard(<TaskCard task={task} onToggleComplete={() => {}} onDelete={onDelete} />);
     await user.click(screen.getByRole("button", { name: /delete task/i }));
 
     expect(onDelete).toHaveBeenCalledWith(task);
   });
 
   it("renders the assignee name when provided", () => {
-    render(
+    renderCard(
       <TaskCard
         task={makeTask({ assigned_to: "user-2" })}
         assignee={{

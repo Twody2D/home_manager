@@ -9,7 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from home_manager.auth.models import User
 from home_manager.core.errors import AppError
 from home_manager.tasks.models import Task, TaskList, TaskStatus
-from home_manager.tasks.schemas import TaskCreate, TaskListCreate, TaskListUpdate, TaskUpdate
+from home_manager.tasks.schemas import (
+    TaskCreate,
+    TaskListCreate,
+    TaskListUpdate,
+    TaskReorderRequest,
+    TaskUpdate,
+)
 
 
 class TaskNotFoundError(AppError):
@@ -55,6 +61,12 @@ class InvalidParentTaskError(AppError):
         "parent_task_id must reference a top-level task in the same household with no "
         "subtasks of its own"
     )
+
+
+class InvalidReorderError(AppError):
+    code = "INVALID_REORDER"
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    message = "ordered_ids must exactly match the current tasks in that list/subtask group"
 
 
 async def _ensure_assignee_in_tenant(
@@ -118,6 +130,23 @@ async def _resolve_parent_task(
     return parent
 
 
+async def _next_order_index(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    list_id: uuid.UUID | None,
+    parent_task_id: uuid.UUID | None,
+) -> int:
+    query = select(func.coalesce(func.max(Task.order_index), -1) + 1).where(
+        Task.tenant_id == tenant_id,
+        Task.list_id == list_id if list_id is not None else Task.list_id.is_(None),
+        Task.parent_task_id == parent_task_id
+        if parent_task_id is not None
+        else Task.parent_task_id.is_(None),
+    )
+    return await session.scalar(query) or 0
+
+
 async def create_task(
     session: AsyncSession, *, tenant_id: uuid.UUID, created_by: uuid.UUID, payload: TaskCreate
 ) -> Task:
@@ -133,6 +162,9 @@ async def create_task(
     else:
         await _ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=payload.list_id)
         list_id = payload.list_id
+    order_index = await _next_order_index(
+        session, tenant_id=tenant_id, list_id=list_id, parent_task_id=payload.parent_task_id
+    )
 
     task = Task(
         tenant_id=tenant_id,
@@ -151,6 +183,7 @@ async def create_task(
         budget_owner_user_id=payload.budget_owner_user_id,
         list_id=list_id,
         parent_task_id=payload.parent_task_id,
+        order_index=order_index,
     )
     session.add(task)
     await session.flush()
@@ -186,7 +219,12 @@ async def list_tasks(
     # Callers group into lists/subtask trees client-side from the full set —
     # same approach as the calendar day-list grouping — so no list_id filter
     # here; a household's task count is small enough that this is cheap.
-    query = query.order_by(Task.created_at.desc()).limit(limit).offset(offset)
+    # order_index is only meaningful within one sibling group, so this
+    # ordering is just a reasonable default — callers still sort each group
+    # by order_index themselves once grouped.
+    query = (
+        query.order_by(Task.order_index.asc(), Task.created_at.desc()).limit(limit).offset(offset)
+    )
 
     total = await session.scalar(count_query)
     items = list((await session.scalars(query)).all())
@@ -228,6 +266,16 @@ async def update_task(
         else:
             await _ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=updates["list_id"])
 
+    target_list_id = updates.get("list_id", task.list_id)
+    target_parent_id = updates.get("parent_task_id", task.parent_task_id)
+    if target_list_id != task.list_id or target_parent_id != task.parent_task_id:
+        # Moved to a different sibling group (list and/or parent changed) —
+        # append at the end of the new group rather than keeping a position
+        # number that was only meaningful in the old one.
+        updates["order_index"] = await _next_order_index(
+            session, tenant_id=tenant_id, list_id=target_list_id, parent_task_id=target_parent_id
+        )
+
     new_preferred_start = updates.get("preferred_start", task.preferred_start)
     new_preferred_end = updates.get("preferred_end", task.preferred_end)
     if (
@@ -251,6 +299,35 @@ async def delete_task(session: AsyncSession, *, tenant_id: uuid.UUID, task_id: u
     task = await get_task(session, tenant_id=tenant_id, task_id=task_id)
     await session.delete(task)
     await session.flush()
+
+
+async def reorder_tasks(
+    session: AsyncSession, *, tenant_id: uuid.UUID, payload: TaskReorderRequest
+) -> list[Task]:
+    """Sets order_index for every task in one sibling group at once.
+
+    ordered_ids must be exactly the current set of siblings — no more, no
+    less. Requiring an exact match (rather than allowing a partial list)
+    means the tenant_id-scoped fetch below is also the complete authorization
+    check: an id from another household, or one that belongs to a different
+    list/parent, simply won't be in the fetched set, so the set comparison
+    fails closed instead of silently reordering a subset.
+    """
+    query = select(Task).where(
+        Task.tenant_id == tenant_id,
+        Task.list_id == payload.list_id if payload.list_id is not None else Task.list_id.is_(None),
+        Task.parent_task_id == payload.parent_task_id
+        if payload.parent_task_id is not None
+        else Task.parent_task_id.is_(None),
+    )
+    siblings = {task.id: task for task in (await session.scalars(query)).all()}
+    if set(payload.ordered_ids) != set(siblings.keys()):
+        raise InvalidReorderError()
+
+    for index, task_id in enumerate(payload.ordered_ids):
+        siblings[task_id].order_index = index
+    await session.flush()
+    return [siblings[task_id] for task_id in payload.ordered_ids]
 
 
 async def create_task_list(
