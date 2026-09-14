@@ -1,10 +1,23 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import type { DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { GripIcon } from "../components/TaskCard";
+import { SortableListItem } from "../components/SortableListItem";
+import {
   useCreateTask,
   useDeleteTask,
+  useReorderTasks,
   useTask,
   useTasks,
   useTaskLists,
@@ -43,6 +56,7 @@ export function TaskDetailPage() {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const createTask = useCreateTask();
+  const reorderTasks = useReorderTasks();
 
   const members = membersQuery.data ?? [];
   const taskLists = taskListsQuery.data?.items ?? [];
@@ -56,6 +70,19 @@ export function TaskDetailPage() {
   const [budgetAmount, setBudgetAmount] = useState("");
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState("");
+  // Immediate local reflection of a just-dropped subtask reorder — see the
+  // same pattern (and the reason it's needed) in TasksPage.
+  const [subtaskOrder, setSubtaskOrder] = useState<string[] | null>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") navigate(-1);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigate]);
 
   useEffect(() => {
     if (task && task.id !== loadedId) {
@@ -79,6 +106,31 @@ export function TaskDetailPage() {
     await createTask.mutateAsync({ title: subtaskTitle.trim(), parent_task_id: task.id });
     setSubtaskTitle("");
     setIsAddingSubtask(false);
+  }
+
+  const orderedSubtasks = (() => {
+    if (!subtaskOrder) return subtasks;
+    const byId = new Map(subtasks.map((s) => [s.id, s]));
+    const known = new Set(subtasks.map((s) => s.id));
+    const ordered = subtaskOrder.filter((id) => known.has(id)).map((id) => byId.get(id)!);
+    const missing = subtasks.filter((s) => !subtaskOrder.includes(s.id));
+    return [...ordered, ...missing];
+  })();
+
+  function handleSubtaskDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!task || !over || active.id === over.id) return;
+    const ids = orderedSubtasks.map((s) => s.id);
+    const oldIndex = ids.indexOf(String(active.id));
+    const newIndex = ids.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(ids, oldIndex, newIndex);
+    // See TasksPage.handleDragEnd for why this is wrapped in flushSync.
+    flushSync(() => setSubtaskOrder(reordered));
+    reorderTasks.mutate(
+      { list_id: task.list_id, parent_task_id: task.id, ordered_ids: reordered },
+      { onSettled: () => setSubtaskOrder(null) },
+    );
   }
 
   async function handleDelete() {
@@ -276,47 +328,75 @@ export function TaskDetailPage() {
         <div className="space-y-2 border-t border-slate-100 pt-3">
           <h2 className="text-sm font-semibold text-slate-900">{t("tasks.detail.subtasksTitle")}</h2>
           {subtasks.length === 0 && <p className="text-sm text-slate-400">{t("tasks.empty")}</p>}
-          <ul className="space-y-1.5">
-            {subtasks.map((subtask) => (
-              <li
-                key={subtask.id}
-                className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5"
+          {subtasks.length > 0 && (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleSubtaskDragEnd}
+            >
+              <SortableContext
+                items={orderedSubtasks.map((s) => s.id)}
+                strategy={verticalListSortingStrategy}
               >
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateTask.mutate({
-                      id: subtask.id,
-                      input: { status: subtask.status === "completed" ? "pending" : "completed" },
-                    })
-                  }
-                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-                    subtask.status === "completed"
-                      ? "border-blue-600 bg-blue-600"
-                      : "border-slate-300"
-                  }`}
-                />
-                <Link
-                  to={`/tasks/${subtask.id}`}
-                  className={`flex-1 truncate text-sm ${
-                    subtask.status === "completed" ? "text-slate-400 line-through" : "text-slate-900"
-                  }`}
-                >
-                  {subtask.title}
-                </Link>
-                <button
-                  type="button"
-                  aria-label={t("taskCard.deleteTask")}
-                  onClick={() => deleteTask.mutate(subtask.id)}
-                  className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600"
-                >
-                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                    <path d="M8 2a1 1 0 0 0-1 1v1H4a1 1 0 0 0 0 2h.35l.65 10.02A2 2 0 0 0 6.99 18h6.02a2 2 0 0 0 2-1.98L15.65 6H16a1 1 0 1 0 0-2h-3V3a1 1 0 0 0-1-1H8Zm1 2V3h2v1H9Zm-1.63 2h7.26l-.63 9.9a.5.5 0 0 1-.5.1H7.5a.5.5 0 0 1-.5-.1L6.37 6Z" />
-                  </svg>
-                </button>
-              </li>
-            ))}
-          </ul>
+                <ul className="space-y-1.5">
+                  {orderedSubtasks.map((subtask) => (
+                    <SortableListItem key={subtask.id} id={subtask.id}>
+                      {(slot) => (
+                        <li
+                          ref={slot.innerRef}
+                          style={slot.style}
+                          className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5"
+                        >
+                          <button
+                            type="button"
+                            aria-label={t("taskCard.reorder")}
+                            className="flex h-6 w-5 shrink-0 touch-none items-center justify-center text-slate-300 hover:text-slate-500"
+                            {...slot.dragHandleProps}
+                          >
+                            <GripIcon />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateTask.mutate({
+                                id: subtask.id,
+                                input: { status: subtask.status === "completed" ? "pending" : "completed" },
+                              })
+                            }
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                              subtask.status === "completed"
+                                ? "border-blue-600 bg-blue-600"
+                                : "border-slate-300"
+                            }`}
+                          />
+                          <Link
+                            to={`/tasks/${subtask.id}`}
+                            className={`flex-1 truncate text-sm ${
+                              subtask.status === "completed"
+                                ? "text-slate-400 line-through"
+                                : "text-slate-900"
+                            }`}
+                          >
+                            {subtask.title}
+                          </Link>
+                          <button
+                            type="button"
+                            aria-label={t("taskCard.deleteTask")}
+                            onClick={() => deleteTask.mutate(subtask.id)}
+                            className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600"
+                          >
+                            <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                              <path d="M8 2a1 1 0 0 0-1 1v1H4a1 1 0 0 0 0 2h.35l.65 10.02A2 2 0 0 0 6.99 18h6.02a2 2 0 0 0 2-1.98L15.65 6H16a1 1 0 1 0 0-2h-3V3a1 1 0 0 0-1-1H8Zm1 2V3h2v1H9Zm-1.63 2h7.26l-.63 9.9a.5.5 0 0 1-.5.1H7.5a.5.5 0 0 1-.5-.1L6.37 6Z" />
+                            </svg>
+                          </button>
+                        </li>
+                      )}
+                    </SortableListItem>
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+          )}
           {isAddingSubtask ? (
             <form onSubmit={(e) => void handleAddSubtask(e)} className="flex items-center gap-1">
               <input

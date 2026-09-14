@@ -109,6 +109,7 @@ export const en = {
     due: "Due {{date}}",
     deleteTask: "Delete task",
     reorder: "Drag to reorder",
+    toggleSubtasks: "Show/hide subtasks",
   },
   taskPriority: {
     low: "low",

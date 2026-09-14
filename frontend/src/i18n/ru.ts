@@ -111,6 +111,7 @@ export const ru: typeof en = {
     due: "Срок: {{date}}",
     deleteTask: "Удалить задачу",
     reorder: "Перетащить, чтобы изменить порядок",
+    toggleSubtasks: "Показать/скрыть подзадачи",
   },
   taskPriority: {
     low: "низкий",

@@ -24,9 +24,7 @@ export function useCreateTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: TaskCreateInput) => tasksApi.createTask(input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: TASKS_KEY });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASKS_KEY }),
   });
 }
 
@@ -35,9 +33,7 @@ export function useUpdateTask() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: TaskUpdateInput }) =>
       tasksApi.updateTask(id, input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: TASKS_KEY });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASKS_KEY }),
   });
 }
 
@@ -45,9 +41,7 @@ export function useDeleteTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => tasksApi.deleteTask(id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: TASKS_KEY });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASKS_KEY }),
   });
 }
 
@@ -55,9 +49,12 @@ export function useReorderTasks() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: tasksApi.ReorderTasksInput) => tasksApi.reorderTasks(input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: TASKS_KEY });
-    },
+    // Awaited (not fire-and-forget) so that a component clearing its own
+    // optimistic order in onSettled doesn't do so before the invalidated
+    // query has actually refetched — otherwise the list would briefly fall
+    // back to the stale pre-drag cache and then jump again once the fresh
+    // data lands.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASKS_KEY }),
   });
 }
 
@@ -72,9 +69,7 @@ export function useCreateTaskList() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: TaskListCreateInput) => tasksApi.createTaskList(input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY }),
   });
 }
 
@@ -83,9 +78,7 @@ export function useRenameTaskList() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: TaskListCreateInput }) =>
       tasksApi.renameTaskList(id, input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY }),
   });
 }
 
@@ -93,12 +86,13 @@ export function useDeleteTaskList() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => tasksApi.deleteTaskList(id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY });
-      // Deleted-list tasks move back to "My Tasks" server-side — refresh
-      // the task list too so that shows up immediately.
-      void queryClient.invalidateQueries({ queryKey: TASKS_KEY });
-    },
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY }),
+        // Deleted-list tasks move back to "My Tasks" server-side — refresh
+        // the task list too so that shows up immediately.
+        queryClient.invalidateQueries({ queryKey: TASKS_KEY }),
+      ]),
   });
 }
 
@@ -106,8 +100,6 @@ export function useReorderTaskLists() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (orderedIds: string[]) => tasksApi.reorderTaskLists(orderedIds),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY }),
   });
 }

@@ -21,6 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { TaskForm } from "../components/TaskForm";
 import { TaskCard } from "../components/TaskCard";
+import { SortableListItem } from "../components/SortableListItem";
 import {
   useCreateTask,
   useCreateTaskList,
@@ -293,42 +294,6 @@ function TaskListTabs({
   );
 }
 
-interface SortableSlotArgs {
-  innerRef: (node: HTMLLIElement | null) => void;
-  style: CSSProperties;
-  dragHandleProps?: Record<string, unknown>;
-}
-
-function SortableSlot({
-  id,
-  disabled,
-  children,
-}: {
-  id: string;
-  disabled?: boolean;
-  children: (args: SortableSlotArgs) => ReactNode;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id,
-    disabled,
-  });
-  const style: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.6 : 1,
-    zIndex: isDragging ? 1 : undefined,
-  };
-  return (
-    <>
-      {children({
-        innerRef: setNodeRef,
-        style,
-        dragHandleProps: disabled ? undefined : { ...attributes, ...listeners },
-      })}
-    </>
-  );
-}
-
 function splitByStatus(tasks: Task[]): { active: Task[]; completed: Task[] } {
   const active: Task[] = [];
   const completed: Task[] = [];
@@ -379,12 +344,14 @@ function TaskGroup({
   rootDragDisabled: boolean;
 }) {
   const [showCompleted, setShowCompleted] = useState(false);
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
   const { active: activeSubtasks, completed: completedSubtasks } = splitByStatus(subtasks);
+  const hasSubtasks = subtasks.length > 0;
 
   return (
     <li className="space-y-1.5">
       <ul>
-        <SortableSlot id={task.id} disabled={rootDragDisabled}>
+        <SortableListItem id={task.id} disabled={rootDragDisabled}>
           {(slot) => (
             <TaskCard
               task={task}
@@ -392,20 +359,25 @@ function TaskGroup({
               budgetOwner={
                 task.budget_owner_user_id ? membersById.get(task.budget_owner_user_id) : undefined
               }
+              subtaskToggle={
+                hasSubtasks
+                  ? { expanded: !subtasksCollapsed, onToggle: () => setSubtasksCollapsed((c) => !c) }
+                  : undefined
+              }
               isUpdating={isUpdating}
               onToggleComplete={onToggleComplete}
               onDelete={onDelete}
               {...slot}
             />
           )}
-        </SortableSlot>
+        </SortableListItem>
       </ul>
 
-      {subtasks.length > 0 && (
+      {hasSubtasks && !subtasksCollapsed && (
         <ul className="ml-6 space-y-1.5 border-l border-slate-200 pl-3">
           <SortableContext items={activeSubtasks.map((s) => s.id)} strategy={verticalListSortingStrategy}>
             {activeSubtasks.map((subtask) => (
-              <SortableSlot key={subtask.id} id={subtask.id}>
+              <SortableListItem key={subtask.id} id={subtask.id}>
                 {(slot) => (
                   <TaskCard
                     task={subtask}
@@ -417,7 +389,7 @@ function TaskGroup({
                     {...slot}
                   />
                 )}
-              </SortableSlot>
+              </SortableListItem>
             ))}
           </SortableContext>
           <CompletedToggle

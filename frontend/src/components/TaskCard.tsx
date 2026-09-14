@@ -11,7 +11,7 @@ const PRIORITY_STYLES: Record<Task["priority"], string> = {
   urgent: "bg-red-100 text-red-700",
 };
 
-function GripIcon() {
+export function GripIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
       <circle cx="7" cy="5" r="1.3" />
@@ -32,6 +32,9 @@ interface TaskCardProps {
   // that mixes subtasks in with root tasks (e.g. the dashboard's "no due
   // date" bucket), so it's clear which task a subtask belongs to.
   parentTitle?: string;
+  // Present only when this task has subtasks — renders a chevron that
+  // expands/collapses them, so a long subtask list can be tucked away.
+  subtaskToggle?: { expanded: boolean; onToggle: () => void };
   onToggleComplete: (task: Task) => void;
   onDelete: (task: Task) => void;
   isUpdating?: boolean;
@@ -49,6 +52,7 @@ export function TaskCard({
   assignee,
   budgetOwner,
   parentTitle,
+  subtaskToggle,
   onToggleComplete,
   onDelete,
   isUpdating,
@@ -94,6 +98,23 @@ export function TaskCard({
           </svg>
         )}
       </button>
+
+      {subtaskToggle && (
+        <button
+          type="button"
+          aria-label={t("taskCard.toggleSubtasks")}
+          onClick={subtaskToggle.onToggle}
+          className="flex h-6 w-6 shrink-0 items-center justify-center text-slate-400 hover:text-slate-600"
+        >
+          <svg
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className={`h-3.5 w-3.5 transition-transform ${subtaskToggle.expanded ? "rotate-90" : ""}`}
+          >
+            <path d="M7.3 4.3a1 1 0 0 1 1.4 0l5 5a1 1 0 0 1 0 1.4l-5 5a1 1 0 1 1-1.4-1.4L11.58 10 7.3 5.7a1 1 0 0 1 0-1.4Z" />
+          </svg>
+        </button>
+      )}
 
       <Link to={`/tasks/${task.id}`} className="min-w-0 flex-1 py-0.5">
         <p
