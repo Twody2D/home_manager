@@ -5,13 +5,14 @@ import type { TaskCreateInput, TaskPriority, User } from "../api/types";
 
 interface TaskFormProps {
   members: User[];
+  listId: string | null;
   onSubmit: (input: TaskCreateInput) => Promise<void>;
   isSubmitting: boolean;
 }
 
 const PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
-export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
+export function TaskForm({ members, listId, onSubmit, isSubmitting }: TaskFormProps) {
   const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
@@ -34,6 +35,7 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
       duration_minutes: durationMinutes ? Number(durationMinutes) : null,
       budget_amount: budgetAmount || null,
       budget_owner_user_id: budgetAmount ? budgetOwnerId || null : null,
+      list_id: listId,
     });
 
     setTitle("");
@@ -138,7 +140,7 @@ export function TaskForm({ members, onSubmit, isSubmitting }: TaskFormProps) {
               }}
               className="rounded-md px-2 py-1.5 text-sm font-medium text-slate-500 hover:bg-slate-100"
             >
-              {t("finance.subscriptions.cancel")}
+              {t("common.cancel")}
             </button>
           </>
         )}

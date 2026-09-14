@@ -5,6 +5,8 @@ export const ru: typeof en = {
     add: "Добавить",
     save: "Сохранить",
     saved: "Сохранено.",
+    cancel: "Отмена",
+    delete: "Удалить",
     somethingWentWrong: "Что-то пошло не так",
   },
   nav: {
@@ -71,6 +73,13 @@ export const ru: typeof en = {
       amountPlaceholder: "Сумма",
       shared: "Общий",
     },
+    myTasks: "Мои задачи",
+    addList: "Новая папка",
+    newListPlaceholder: "Название папки…",
+    renameList: "Переименовать",
+    deleteList: "Удалить папку",
+    addSubtask: "Добавить подзадачу",
+    subtaskPlaceholder: "Подзадача…",
   },
   taskCard: {
     markAsPending: "Отметить как активную",

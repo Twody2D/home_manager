@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as tasksApi from "../api/tasks";
-import type { TaskCreateInput, TaskUpdateInput } from "../api/types";
+import type { TaskCreateInput, TaskListCreateInput, TaskUpdateInput } from "../api/types";
 
 const TASKS_KEY = ["tasks"] as const;
+const TASK_LISTS_KEY = ["task-lists"] as const;
 
 export function useTasks(params: tasksApi.ListTasksParams = {}) {
   return useQuery({
@@ -37,6 +38,47 @@ export function useDeleteTask() {
   return useMutation({
     mutationFn: (id: string) => tasksApi.deleteTask(id),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TASKS_KEY });
+    },
+  });
+}
+
+export function useTaskLists() {
+  return useQuery({
+    queryKey: TASK_LISTS_KEY,
+    queryFn: () => tasksApi.listTaskLists(),
+  });
+}
+
+export function useCreateTaskList() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TaskListCreateInput) => tasksApi.createTaskList(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY });
+    },
+  });
+}
+
+export function useRenameTaskList() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: TaskListCreateInput }) =>
+      tasksApi.renameTaskList(id, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY });
+    },
+  });
+}
+
+export function useDeleteTaskList() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => tasksApi.deleteTaskList(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY });
+      // Deleted-list tasks move back to "My Tasks" server-side — refresh
+      // the task list too so that shows up immediately.
       void queryClient.invalidateQueries({ queryKey: TASKS_KEY });
     },
   });

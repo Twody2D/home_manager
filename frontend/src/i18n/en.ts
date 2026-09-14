@@ -3,6 +3,8 @@ export const en = {
     add: "Add",
     save: "Save",
     saved: "Saved.",
+    cancel: "Cancel",
+    delete: "Delete",
     somethingWentWrong: "Something went wrong",
   },
   nav: {
@@ -69,6 +71,13 @@ export const en = {
       amountPlaceholder: "Amount",
       shared: "Shared",
     },
+    myTasks: "My Tasks",
+    addList: "New list",
+    newListPlaceholder: "List name…",
+    renameList: "Rename",
+    deleteList: "Delete list",
+    addSubtask: "Add subtask",
+    subtaskPlaceholder: "Subtask…",
   },
   taskCard: {
     markAsPending: "Mark as pending",

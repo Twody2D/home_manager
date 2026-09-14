@@ -1,5 +1,14 @@
 import { apiFetch } from "./client";
-import type { Task, TaskCreateInput, TaskListResponse, TaskStatus, TaskUpdateInput } from "./types";
+import type {
+  Task,
+  TaskCreateInput,
+  TaskList,
+  TaskListCreateInput,
+  TaskListsResponse,
+  TaskPageResponse,
+  TaskStatus,
+  TaskUpdateInput,
+} from "./types";
 
 export interface ListTasksParams {
   status?: TaskStatus;
@@ -8,7 +17,7 @@ export interface ListTasksParams {
   offset?: number;
 }
 
-export function listTasks(params: ListTasksParams = {}): Promise<TaskListResponse> {
+export function listTasks(params: ListTasksParams = {}): Promise<TaskPageResponse> {
   const search = new URLSearchParams();
   if (params.status) search.set("status", params.status);
   if (params.assigned_to) search.set("assigned_to", params.assigned_to);
@@ -28,4 +37,20 @@ export function updateTask(id: string, input: TaskUpdateInput): Promise<Task> {
 
 export function deleteTask(id: string): Promise<void> {
   return apiFetch(`/tasks/${id}`, { method: "DELETE" });
+}
+
+export function listTaskLists(): Promise<TaskListsResponse> {
+  return apiFetch("/task-lists");
+}
+
+export function createTaskList(input: TaskListCreateInput): Promise<TaskList> {
+  return apiFetch("/task-lists", { method: "POST", body: input });
+}
+
+export function renameTaskList(id: string, input: TaskListCreateInput): Promise<TaskList> {
+  return apiFetch(`/task-lists/${id}`, { method: "PATCH", body: input });
+}
+
+export function deleteTaskList(id: string): Promise<void> {
+  return apiFetch(`/task-lists/${id}`, { method: "DELETE" });
 }

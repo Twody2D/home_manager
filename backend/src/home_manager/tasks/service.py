@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from home_manager.auth.models import User
 from home_manager.core.errors import AppError
-from home_manager.tasks.models import Task, TaskStatus
-from home_manager.tasks.schemas import TaskCreate, TaskUpdate
+from home_manager.tasks.models import Task, TaskList, TaskStatus
+from home_manager.tasks.schemas import TaskCreate, TaskListCreate, TaskListUpdate, TaskUpdate
 
 
 class TaskNotFoundError(AppError):
@@ -36,6 +36,27 @@ class InvalidBudgetOwnerError(AppError):
     message = "Budget owner must be a member of the same household"
 
 
+class TaskListNotFoundError(AppError):
+    code = "TASK_LIST_NOT_FOUND"
+    status_code = status.HTTP_404_NOT_FOUND
+    message = "Task list not found"
+
+
+class InvalidTaskListError(AppError):
+    code = "INVALID_TASK_LIST"
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    message = "list_id must reference a list in the same household"
+
+
+class InvalidParentTaskError(AppError):
+    code = "INVALID_PARENT_TASK"
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    message = (
+        "parent_task_id must reference a top-level task in the same household with no "
+        "subtasks of its own"
+    )
+
+
 async def _ensure_assignee_in_tenant(
     session: AsyncSession, *, tenant_id: uuid.UUID, assigned_to: uuid.UUID | None
 ) -> None:
@@ -56,6 +77,47 @@ async def _ensure_budget_owner_in_tenant(
         raise InvalidBudgetOwnerError()
 
 
+async def _ensure_list_in_tenant(
+    session: AsyncSession, *, tenant_id: uuid.UUID, list_id: uuid.UUID | None
+) -> None:
+    if list_id is None:
+        return
+    task_list = await session.get(TaskList, list_id)
+    if task_list is None or task_list.tenant_id != tenant_id:
+        raise InvalidTaskListError()
+
+
+async def _resolve_parent_task(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    task_id: uuid.UUID | None,
+    parent_task_id: uuid.UUID | None,
+) -> Task | None:
+    """Validates a subtask link and returns the parent (None if unset).
+
+    Nesting is capped at one level, the same as Google Tasks: the parent
+    must be a top-level task (no parent of its own), and — to stop a
+    top-level task with existing children from being turned into a subtask,
+    which would silently produce a third level — it must have no children
+    of its own either.
+    """
+    if parent_task_id is None:
+        return None
+    if parent_task_id == task_id:
+        raise InvalidParentTaskError()
+    parent = await session.get(Task, parent_task_id)
+    if parent is None or parent.tenant_id != tenant_id or parent.parent_task_id is not None:
+        raise InvalidParentTaskError()
+    if task_id is not None:
+        has_children = await session.scalar(
+            select(func.count()).select_from(Task).where(Task.parent_task_id == task_id)
+        )
+        if has_children:
+            raise InvalidParentTaskError()
+    return parent
+
+
 async def create_task(
     session: AsyncSession, *, tenant_id: uuid.UUID, created_by: uuid.UUID, payload: TaskCreate
 ) -> Task:
@@ -63,6 +125,14 @@ async def create_task(
     await _ensure_budget_owner_in_tenant(
         session, tenant_id=tenant_id, budget_owner_user_id=payload.budget_owner_user_id
     )
+    parent = await _resolve_parent_task(
+        session, tenant_id=tenant_id, task_id=None, parent_task_id=payload.parent_task_id
+    )
+    if parent is not None:
+        list_id = parent.list_id
+    else:
+        await _ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=payload.list_id)
+        list_id = payload.list_id
 
     task = Task(
         tenant_id=tenant_id,
@@ -79,6 +149,8 @@ async def create_task(
         recurrence=payload.recurrence,
         budget_amount=payload.budget_amount,
         budget_owner_user_id=payload.budget_owner_user_id,
+        list_id=list_id,
+        parent_task_id=payload.parent_task_id,
     )
     session.add(task)
     await session.flush()
@@ -111,6 +183,9 @@ async def list_tasks(
         query = query.where(Task.assigned_to == assigned_to)
         count_query = count_query.where(Task.assigned_to == assigned_to)
 
+    # Callers group into lists/subtask trees client-side from the full set —
+    # same approach as the calendar day-list grouping — so no list_id filter
+    # here; a household's task count is small enough that this is cheap.
     query = query.order_by(Task.created_at.desc()).limit(limit).offset(offset)
 
     total = await session.scalar(count_query)
@@ -132,6 +207,26 @@ async def update_task(
         await _ensure_budget_owner_in_tenant(
             session, tenant_id=tenant_id, budget_owner_user_id=updates["budget_owner_user_id"]
         )
+    if "parent_task_id" in updates:
+        parent = await _resolve_parent_task(
+            session,
+            tenant_id=tenant_id,
+            task_id=task.id,
+            parent_task_id=updates["parent_task_id"],
+        )
+        # A subtask always lives in its parent's list; promoting a subtask
+        # back to top-level (parent_task_id -> null) leaves list_id as-is
+        # unless the caller also set it explicitly in this same request.
+        if parent is not None:
+            updates["list_id"] = parent.list_id
+    elif "list_id" in updates:
+        if task.parent_task_id is not None:
+            # Subtasks always inherit their parent's list — a bare list_id
+            # change is a no-op rather than an error, same as if the field
+            # had been left unset.
+            del updates["list_id"]
+        else:
+            await _ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=updates["list_id"])
 
     new_preferred_start = updates.get("preferred_start", task.preferred_start)
     new_preferred_end = updates.get("preferred_end", task.preferred_end)
@@ -155,4 +250,52 @@ async def update_task(
 async def delete_task(session: AsyncSession, *, tenant_id: uuid.UUID, task_id: uuid.UUID) -> None:
     task = await get_task(session, tenant_id=tenant_id, task_id=task_id)
     await session.delete(task)
+    await session.flush()
+
+
+async def create_task_list(
+    session: AsyncSession, *, tenant_id: uuid.UUID, created_by: uuid.UUID, payload: TaskListCreate
+) -> TaskList:
+    task_list = TaskList(tenant_id=tenant_id, created_by=created_by, name=payload.name)
+    session.add(task_list)
+    await session.flush()
+    return task_list
+
+
+async def list_task_lists(session: AsyncSession, *, tenant_id: uuid.UUID) -> list[TaskList]:
+    query = (
+        select(TaskList).where(TaskList.tenant_id == tenant_id).order_by(TaskList.created_at.asc())
+    )
+    return list((await session.scalars(query)).all())
+
+
+async def get_task_list(
+    session: AsyncSession, *, tenant_id: uuid.UUID, list_id: uuid.UUID
+) -> TaskList:
+    task_list = await session.get(TaskList, list_id)
+    if task_list is None or task_list.tenant_id != tenant_id:
+        raise TaskListNotFoundError()
+    return task_list
+
+
+async def update_task_list(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    list_id: uuid.UUID,
+    payload: TaskListUpdate,
+) -> TaskList:
+    task_list = await get_task_list(session, tenant_id=tenant_id, list_id=list_id)
+    task_list.name = payload.name
+    await session.flush()
+    return task_list
+
+
+async def delete_task_list(
+    session: AsyncSession, *, tenant_id: uuid.UUID, list_id: uuid.UUID
+) -> None:
+    task_list = await get_task_list(session, tenant_id=tenant_id, list_id=list_id)
+    # Tasks in this list are NOT deleted — Task.list_id's ondelete="SET NULL"
+    # moves them back to the default "My Tasks" bucket.
+    await session.delete(task_list)
     await session.flush()

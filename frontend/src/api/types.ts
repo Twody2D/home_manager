@@ -44,12 +44,14 @@ export interface Task {
   recurrence: string | null;
   budget_amount: string | null;
   budget_owner_user_id: string | null;
+  list_id: string | null;
+  parent_task_id: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
 }
 
-export interface TaskListResponse {
+export interface TaskPageResponse {
   items: Task[];
   total: number;
   limit: number;
@@ -69,6 +71,25 @@ export interface TaskCreateInput {
   recurrence?: string | null;
   budget_amount?: string | null;
   budget_owner_user_id?: string | null;
+  list_id?: string | null;
+  parent_task_id?: string | null;
+}
+
+export interface TaskList {
+  id: string;
+  tenant_id: string;
+  created_by: string | null;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskListsResponse {
+  items: TaskList[];
+}
+
+export interface TaskListCreateInput {
+  name: string;
 }
 
 export type TaskUpdateInput = Partial<TaskCreateInput> & { status?: TaskStatus };

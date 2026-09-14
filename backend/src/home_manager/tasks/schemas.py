@@ -22,6 +22,12 @@ class TaskCreate(BaseModel):
     budget_amount: Decimal | None = Field(default=None, gt=0)
     # Whose money the budget draws from — null means shared/household.
     budget_owner_user_id: uuid.UUID | None = None
+    # null means the default "My Tasks" bucket. Ignored when parent_task_id
+    # is set — a subtask always inherits its parent's list.
+    list_id: uuid.UUID | None = None
+    # Set to make this task a subtask. Only one level of nesting is allowed —
+    # the parent must not itself be a subtask (enforced in service.py).
+    parent_task_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _validate_preferred_window(self) -> Self:
@@ -48,6 +54,8 @@ class TaskUpdate(BaseModel):
     recurrence: str | None = Field(default=None, max_length=200)
     budget_amount: Decimal | None = Field(default=None, gt=0)
     budget_owner_user_id: uuid.UUID | None = None
+    list_id: uuid.UUID | None = None
+    parent_task_id: uuid.UUID | None = None
 
 
 class TaskResponse(BaseModel):
@@ -69,13 +77,38 @@ class TaskResponse(BaseModel):
     recurrence: str | None
     budget_amount: Decimal | None
     budget_owner_user_id: uuid.UUID | None
+    list_id: uuid.UUID | None
+    parent_task_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
     completed_at: datetime | None
 
 
-class TaskListResponse(BaseModel):
+class TaskPageResponse(BaseModel):
     items: list[TaskResponse]
     total: int
     limit: int
     offset: int
+
+
+class TaskListCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+class TaskListUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+class TaskListResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    created_by: uuid.UUID | None
+    name: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class TaskListsResponse(BaseModel):
+    items: list[TaskListResponse]

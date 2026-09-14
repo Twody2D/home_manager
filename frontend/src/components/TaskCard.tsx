@@ -16,6 +16,7 @@ interface TaskCardProps {
   onToggleComplete: (task: Task) => void;
   onDelete: (task: Task) => void;
   isUpdating?: boolean;
+  nested?: boolean;
 }
 
 export function TaskCard({
@@ -25,20 +26,25 @@ export function TaskCard({
   onToggleComplete,
   onDelete,
   isUpdating,
+  nested,
 }: TaskCardProps) {
   const { t, i18n } = useTranslation();
   const isCompleted = task.status === "completed";
 
   return (
-    <li className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+    <li
+      className={`flex items-start gap-3 rounded-lg border border-slate-200 bg-white shadow-sm ${
+        nested ? "p-2" : "p-3"
+      }`}
+    >
       <button
         type="button"
         aria-label={isCompleted ? t("taskCard.markAsPending") : t("taskCard.markAsCompleted")}
         onClick={() => onToggleComplete(task)}
         disabled={isUpdating}
-        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
-          isCompleted ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"
-        }`}
+        className={`mt-0.5 flex shrink-0 items-center justify-center rounded-full border-2 ${
+          nested ? "h-4 w-4" : "h-5 w-5"
+        } ${isCompleted ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"}`}
       >
         {isCompleted && (
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3">
@@ -48,7 +54,11 @@ export function TaskCard({
       </button>
 
       <div className="min-w-0 flex-1">
-        <p className={`text-sm font-medium ${isCompleted ? "text-slate-400 line-through" : "text-slate-900"}`}>
+        <p
+          className={`text-sm font-medium ${
+            isCompleted ? "text-slate-400 line-through" : "text-slate-900"
+          }`}
+        >
           {task.title}
         </p>
         {task.description && <p className="mt-0.5 text-xs text-slate-500">{task.description}</p>}

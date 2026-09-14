@@ -38,6 +38,32 @@ class TaskPriority(StrEnum):
     URGENT = "urgent"
 
 
+class TaskList(Base):
+    """A household-shared folder tasks can be grouped into (e.g. "Покупки",
+    "Треки") — visible to every member, same as tasks themselves. A task
+    with list_id=None belongs to the default "My Tasks" bucket."""
+
+    __tablename__ = "task_lists"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=utcnow, nullable=False
+    )
+
+
 class Task(Base):
     __tablename__ = "tasks"
     __table_args__ = (
@@ -53,7 +79,13 @@ class Task(Base):
             "budget_amount IS NULL OR budget_amount > 0",
             name="ck_tasks_budget_amount_positive",
         ),
+        CheckConstraint(
+            "parent_task_id IS NULL OR parent_task_id != id",
+            name="ck_tasks_parent_not_self",
+        ),
         Index("ix_tasks_tenant_status", "tenant_id", "status"),
+        Index("ix_tasks_list", "list_id"),
+        Index("ix_tasks_parent", "parent_task_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -97,6 +129,15 @@ class Task(Base):
     # convention as Subscription.owner_user_id.
     budget_owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # null means the default "My Tasks" bucket, not "no list feature used".
+    list_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("task_lists.id", ondelete="SET NULL"), nullable=True
+    )
+    # Single level of nesting only (like Google Tasks) — a subtask's own
+    # parent_task_id is always null, enforced in service.py, not the DB.
+    parent_task_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
