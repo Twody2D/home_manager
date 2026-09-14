@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   useCreateTask,
   useDeleteTask,
@@ -296,13 +296,14 @@ export function TaskDetailPage() {
                       : "border-slate-300"
                   }`}
                 />
-                <span
-                  className={`flex-1 text-sm ${
+                <Link
+                  to={`/tasks/${subtask.id}`}
+                  className={`flex-1 truncate text-sm ${
                     subtask.status === "completed" ? "text-slate-400 line-through" : "text-slate-900"
                   }`}
                 >
                   {subtask.title}
-                </span>
+                </Link>
                 <button
                   type="button"
                   aria-label={t("taskCard.deleteTask")}

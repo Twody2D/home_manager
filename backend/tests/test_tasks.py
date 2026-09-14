@@ -352,6 +352,71 @@ async def test_rename_and_delete_task_list(
 
 
 @pytest.mark.asyncio
+async def test_reorder_task_lists(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    a = await client.post("/api/v1/task-lists", json={"name": "A"}, headers=headers)
+    b = await client.post("/api/v1/task-lists", json={"name": "B"}, headers=headers)
+    c = await client.post("/api/v1/task-lists", json={"name": "C"}, headers=headers)
+    a_id, b_id, c_id = a.json()["id"], b.json()["id"], c.json()["id"]
+
+    response = await client.patch(
+        "/api/v1/task-lists/reorder",
+        json={"ordered_ids": [c_id, a_id, b_id]},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [item["id"] for item in body] == [c_id, a_id, b_id]
+    assert [item["order_index"] for item in body] == [0, 1, 2]
+
+    listed = await client.get("/api/v1/task-lists", headers=headers)
+    assert [item["id"] for item in listed.json()["items"]] == [c_id, a_id, b_id]
+
+
+@pytest.mark.asyncio
+async def test_reorder_task_lists_rejects_partial_id_set(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    a = await client.post("/api/v1/task-lists", json={"name": "A"}, headers=headers)
+    await client.post("/api/v1/task-lists", json={"name": "B"}, headers=headers)
+
+    response = await client.patch(
+        "/api/v1/task-lists/reorder",
+        json={"ordered_ids": [a.json()["id"]]},
+        headers=headers,
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_LIST_REORDER"
+
+
+@pytest.mark.asyncio
+async def test_reorder_task_lists_rejects_list_from_other_tenant(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner_a = await register_household(client, email="owner-a@example.com")
+    owner_b = await register_household(client, email="owner-b@example.com")
+    a1 = await client.post(
+        "/api/v1/task-lists", json={"name": "A1"}, headers=_auth_headers(owner_a)
+    )
+    b1 = await client.post(
+        "/api/v1/task-lists", json={"name": "B1"}, headers=_auth_headers(owner_b)
+    )
+
+    response = await client.patch(
+        "/api/v1/task-lists/reorder",
+        json={"ordered_ids": [a1.json()["id"], b1.json()["id"]]},
+        headers=_auth_headers(owner_a),
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_LIST_REORDER"
+
+
+@pytest.mark.asyncio
 async def test_delete_task_list_moves_tasks_to_my_tasks(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

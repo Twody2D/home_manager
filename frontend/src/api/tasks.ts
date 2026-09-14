@@ -68,3 +68,7 @@ export function renameTaskList(id: string, input: TaskListCreateInput): Promise<
 export function deleteTaskList(id: string): Promise<void> {
   return apiFetch(`/task-lists/${id}`, { method: "DELETE" });
 }
+
+export function reorderTaskLists(orderedIds: string[]): Promise<TaskList[]> {
+  return apiFetch("/task-lists/reorder", { method: "PATCH", body: { ordered_ids: orderedIds } });
+}

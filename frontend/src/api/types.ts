@@ -81,6 +81,7 @@ export interface TaskList {
   tenant_id: string;
   created_by: string | null;
   name: string;
+  order_index: number;
   created_at: string;
   updated_at: string;
 }

@@ -107,6 +107,7 @@ class TaskListResponse(BaseModel):
     tenant_id: uuid.UUID
     created_by: uuid.UUID | None
     name: str
+    order_index: int
     created_at: datetime
     updated_at: datetime
 
@@ -124,3 +125,7 @@ class TaskReorderRequest(BaseModel):
     list_id: uuid.UUID | None = None
     parent_task_id: uuid.UUID | None = None
     ordered_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+
+
+class TaskListReorderRequest(BaseModel):
+    ordered_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)

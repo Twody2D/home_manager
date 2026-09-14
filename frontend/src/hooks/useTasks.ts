@@ -101,3 +101,13 @@ export function useDeleteTaskList() {
     },
   });
 }
+
+export function useReorderTaskLists() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (orderedIds: string[]) => tasksApi.reorderTaskLists(orderedIds),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY });
+    },
+  });
+}

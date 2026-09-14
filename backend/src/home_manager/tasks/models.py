@@ -56,6 +56,9 @@ class TaskList(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Manual sort position among a household's lists, for drag-and-drop
+    # reordering of the folder tabs — same convention as Task.order_index.
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

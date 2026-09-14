@@ -73,6 +73,11 @@ export function DashboardPage() {
   const todayEvents = [...(todayEventsQuery.data ?? [])].sort((a, b) =>
     a.start_at.localeCompare(b.start_at),
   );
+  const allTasks = tasksQuery.data?.items ?? [];
+  const titleById = new Map(allTasks.map((task) => [task.id, task.title]));
+  function parentTitleFor(task: Task): string | undefined {
+    return task.parent_task_id ? titleById.get(task.parent_task_id) : undefined;
+  }
 
   function handleComplete(task: Task) {
     updateTask.mutate({ id: task.id, input: { status: "completed" } });
@@ -90,7 +95,7 @@ export function DashboardPage() {
     return <p className="text-sm text-red-600">{t("dashboard.error")}</p>;
   }
 
-  const { overdue, today, other } = partitionByDueDate(tasksQuery.data?.items ?? []);
+  const { overdue, today, other } = partitionByDueDate(allTasks);
   const dateLabel = new Date().toLocaleDateString(i18n.language, {
     weekday: "long",
     month: "long",
@@ -167,6 +172,7 @@ export function DashboardPage() {
               budgetOwner={
                 task.budget_owner_user_id ? membersById.get(task.budget_owner_user_id) : undefined
               }
+              parentTitle={parentTitleFor(task)}
               isUpdating={updateTask.isPending}
               onToggleComplete={handleComplete}
               onDelete={handleDelete}
@@ -185,6 +191,7 @@ export function DashboardPage() {
               budgetOwner={
                 task.budget_owner_user_id ? membersById.get(task.budget_owner_user_id) : undefined
               }
+              parentTitle={parentTitleFor(task)}
               isUpdating={updateTask.isPending}
               onToggleComplete={handleComplete}
               onDelete={handleDelete}
@@ -203,6 +210,7 @@ export function DashboardPage() {
               budgetOwner={
                 task.budget_owner_user_id ? membersById.get(task.budget_owner_user_id) : undefined
               }
+              parentTitle={parentTitleFor(task)}
               isUpdating={updateTask.isPending}
               onToggleComplete={handleComplete}
               onDelete={handleDelete}

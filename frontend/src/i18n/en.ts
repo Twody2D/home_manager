@@ -81,6 +81,8 @@ export const en = {
     allLists: "All tasks",
     quickAdd: "New task",
     listMenu: "List menu",
+    completedCount: "Completed ({{count}})",
+    subtaskOf: "Subtask of: {{title}}",
     detail: {
       back: "Back",
       titlePlaceholder: "Task title",

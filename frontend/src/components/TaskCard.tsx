@@ -28,6 +28,10 @@ interface TaskCardProps {
   task: Task;
   assignee?: User;
   budgetOwner?: User;
+  // Shown as a small side label when this card is rendered in a flat list
+  // that mixes subtasks in with root tasks (e.g. the dashboard's "no due
+  // date" bucket), so it's clear which task a subtask belongs to.
+  parentTitle?: string;
   onToggleComplete: (task: Task) => void;
   onDelete: (task: Task) => void;
   isUpdating?: boolean;
@@ -44,6 +48,7 @@ export function TaskCard({
   task,
   assignee,
   budgetOwner,
+  parentTitle,
   onToggleComplete,
   onDelete,
   isUpdating,
@@ -98,8 +103,17 @@ export function TaskCard({
         >
           {task.title}
         </p>
-        {(task.priority !== "medium" || task.due_at || assignee || task.budget_amount) && (
+        {(task.priority !== "medium" ||
+          task.due_at ||
+          assignee ||
+          task.budget_amount ||
+          parentTitle) && (
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+            {parentTitle && (
+              <span className="truncate rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
+                {t("tasks.subtaskOf", { title: parentTitle })}
+              </span>
+            )}
             {task.priority !== "medium" && (
               <span className={`rounded-full px-2 py-0.5 font-medium ${PRIORITY_STYLES[task.priority]}`}>
                 {t(`taskPriority.${task.priority}`)}

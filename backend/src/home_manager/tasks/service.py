@@ -12,6 +12,7 @@ from home_manager.tasks.models import Task, TaskList, TaskStatus
 from home_manager.tasks.schemas import (
     TaskCreate,
     TaskListCreate,
+    TaskListReorderRequest,
     TaskListUpdate,
     TaskReorderRequest,
     TaskUpdate,
@@ -67,6 +68,12 @@ class InvalidReorderError(AppError):
     code = "INVALID_REORDER"
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     message = "ordered_ids must exactly match the current tasks in that list/subtask group"
+
+
+class InvalidListReorderError(AppError):
+    code = "INVALID_LIST_REORDER"
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    message = "ordered_ids must exactly match the household's current task lists"
 
 
 async def _ensure_assignee_in_tenant(
@@ -333,7 +340,17 @@ async def reorder_tasks(
 async def create_task_list(
     session: AsyncSession, *, tenant_id: uuid.UUID, created_by: uuid.UUID, payload: TaskListCreate
 ) -> TaskList:
-    task_list = TaskList(tenant_id=tenant_id, created_by=created_by, name=payload.name)
+    order_index = (
+        await session.scalar(
+            select(func.coalesce(func.max(TaskList.order_index), -1) + 1).where(
+                TaskList.tenant_id == tenant_id
+            )
+        )
+        or 0
+    )
+    task_list = TaskList(
+        tenant_id=tenant_id, created_by=created_by, name=payload.name, order_index=order_index
+    )
     session.add(task_list)
     await session.flush()
     return task_list
@@ -341,7 +358,9 @@ async def create_task_list(
 
 async def list_task_lists(session: AsyncSession, *, tenant_id: uuid.UUID) -> list[TaskList]:
     query = (
-        select(TaskList).where(TaskList.tenant_id == tenant_id).order_by(TaskList.created_at.asc())
+        select(TaskList)
+        .where(TaskList.tenant_id == tenant_id)
+        .order_by(TaskList.order_index.asc(), TaskList.created_at.asc())
     )
     return list((await session.scalars(query)).all())
 
@@ -376,3 +395,20 @@ async def delete_task_list(
     # moves them back to the default "My Tasks" bucket.
     await session.delete(task_list)
     await session.flush()
+
+
+async def reorder_task_lists(
+    session: AsyncSession, *, tenant_id: uuid.UUID, payload: TaskListReorderRequest
+) -> list[TaskList]:
+    """Same exact-match-set pattern as reorder_tasks: fetching every list
+    scoped to this tenant and requiring the payload to cover exactly that
+    set doubles as the authorization check."""
+    query = select(TaskList).where(TaskList.tenant_id == tenant_id)
+    lists = {task_list.id: task_list for task_list in (await session.scalars(query)).all()}
+    if set(payload.ordered_ids) != set(lists.keys()):
+        raise InvalidListReorderError()
+
+    for index, list_id in enumerate(payload.ordered_ids):
+        lists[list_id].order_index = index
+    await session.flush()
+    return [lists[list_id] for list_id in payload.ordered_ids]

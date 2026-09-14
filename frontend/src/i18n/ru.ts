@@ -83,6 +83,8 @@ export const ru: typeof en = {
     allLists: "Все задачи",
     quickAdd: "Новая задача",
     listMenu: "Меню папки",
+    completedCount: "Выполнено ({{count}})",
+    subtaskOf: "Подзадача: {{title}}",
     detail: {
       back: "Назад",
       titlePlaceholder: "Название задачи",

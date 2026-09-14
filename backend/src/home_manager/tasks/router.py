@@ -13,6 +13,7 @@ from home_manager.tasks.models import TaskStatus
 from home_manager.tasks.schemas import (
     TaskCreate,
     TaskListCreate,
+    TaskListReorderRequest,
     TaskListResponse,
     TaskListsResponse,
     TaskListUpdate,
@@ -126,6 +127,19 @@ async def create_task_list(
 async def list_task_lists(current_user: CurrentUser, session: DbSession) -> TaskListsResponse:
     items = await service.list_task_lists(session, tenant_id=current_user.tenant_id)
     return TaskListsResponse(items=[TaskListResponse.model_validate(item) for item in items])
+
+
+@task_lists_router.patch("/reorder", response_model=list[TaskListResponse])
+async def reorder_task_lists(
+    payload: TaskListReorderRequest, current_user: CurrentUser, session: DbSession
+) -> list[TaskListResponse]:
+    # Registered before "/{list_id}" so "reorder" is never parsed as a
+    # list id.
+    lists = await service.reorder_task_lists(
+        session, tenant_id=current_user.tenant_id, payload=payload
+    )
+    await session.commit()
+    return [TaskListResponse.model_validate(task_list) for task_list in lists]
 
 
 @task_lists_router.patch("/{list_id}", response_model=TaskListResponse)
