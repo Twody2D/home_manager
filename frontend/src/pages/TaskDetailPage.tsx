@@ -24,7 +24,11 @@ import {
   useUpdateTask,
 } from "../hooks/useTasks";
 import { useMembers } from "../hooks/useMembers";
-import type { TaskPriority, TaskUpdateInput } from "../api/types";
+import type { Task, TaskPriority, TaskUpdateInput } from "../api/types";
+
+// Levels: task / subtask / sub-subtask / sub-sub-subtask — kept in sync
+// with MAX_TASK_DEPTH in the backend's tasks/service.py.
+const MAX_TASK_DEPTH = 4;
 
 const PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
@@ -41,51 +45,69 @@ function FieldLabel({ children }: { children: string }) {
   return <span className="mb-1 block text-xs font-medium text-slate-600">{children}</span>;
 }
 
-// A sub-subtask row nested under its subtask — shown so the tree is visible
-// without drilling in, but without drag support (that stays available by
-// opening the subtask's own detail page, since sub-subtasks can't have
-// children of their own to make a deeper tree worth rendering here).
+// A sub-subtask (and deeper) row nested under its parent — shown so the
+// whole tree is visible without drilling in. No drag support at this depth
+// (that stays available by opening the row's own detail page); recurses for
+// however many further levels of children it has, so it naturally renders
+// a sub-sub-subtask nested under a sub-subtask too.
 function SubSubtaskRow({
   task,
+  childrenByParent,
   onToggleComplete,
   onDelete,
   t,
 }: {
-  task: { id: string; title: string; status: string };
-  onToggleComplete: () => void;
-  onDelete: () => void;
+  task: Task;
+  childrenByParent: Map<string, Task[]>;
+  onToggleComplete: (id: string) => void;
+  onDelete: (id: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const isCompleted = task.status === "completed";
+  const children = childrenByParent.get(task.id) ?? [];
   return (
-    <li className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5">
-      <button
-        type="button"
-        onClick={onToggleComplete}
-        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-          isCompleted ? "border-blue-600 bg-blue-600" : "border-slate-300"
-        }`}
-      />
-      <Link
-        to={`/tasks/${task.id}`}
-        className={`flex-1 truncate text-sm ${
-          isCompleted ? "text-slate-400 line-through" : "text-slate-700"
-        }`}
-      >
-        {task.title}
-      </Link>
-      <button
-        type="button"
-        aria-label={t("taskCard.deleteTask")}
-        onClick={() => {
-          if (window.confirm(t("tasks.confirmDelete", { title: task.title }))) onDelete();
-        }}
-        className="shrink-0 rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-red-600"
-      >
-        <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
-          <path d="M8 2a1 1 0 0 0-1 1v1H4a1 1 0 0 0 0 2h.35l.65 10.02A2 2 0 0 0 6.99 18h6.02a2 2 0 0 0 2-1.98L15.65 6H16a1 1 0 1 0 0-2h-3V3a1 1 0 0 0-1-1H8Zm1 2V3h2v1H9Zm-1.63 2h7.26l-.63 9.9a.5.5 0 0 1-.5.1H7.5a.5.5 0 0 1-.5-.1L6.37 6Z" />
-        </svg>
-      </button>
+    <li className="space-y-1">
+      <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5">
+        <button
+          type="button"
+          onClick={() => onToggleComplete(task.id)}
+          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+            isCompleted ? "border-blue-600 bg-blue-600" : "border-slate-300"
+          }`}
+        />
+        <Link
+          to={`/tasks/${task.id}`}
+          className={`flex-1 truncate text-sm ${
+            isCompleted ? "text-slate-400 line-through" : "text-slate-700"
+          }`}
+        >
+          {task.title}
+        </Link>
+        <button
+          type="button"
+          aria-label={t("taskCard.deleteTask")}
+          onClick={() => onDelete(task.id)}
+          className="shrink-0 rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-red-600"
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+            <path d="M8 2a1 1 0 0 0-1 1v1H4a1 1 0 0 0 0 2h.35l.65 10.02A2 2 0 0 0 6.99 18h6.02a2 2 0 0 0 2-1.98L15.65 6H16a1 1 0 1 0 0-2h-3V3a1 1 0 0 0-1-1H8Zm1 2V3h2v1H9Zm-1.63 2h7.26l-.63 9.9a.5.5 0 0 1-.5.1H7.5a.5.5 0 0 1-.5-.1L6.37 6Z" />
+          </svg>
+        </button>
+      </div>
+      {children.length > 0 && (
+        <ul className="ml-5 space-y-1 border-l border-slate-200 pl-3">
+          {children.map((child) => (
+            <SubSubtaskRow
+              key={child.id}
+              task={child}
+              childrenByParent={childrenByParent}
+              onToggleComplete={onToggleComplete}
+              onDelete={onDelete}
+              t={t}
+            />
+          ))}
+        </ul>
+      )}
     </li>
   );
 }
@@ -110,17 +132,29 @@ export function TaskDetailPage() {
   const members = membersQuery.data ?? [];
   const taskLists = taskListsQuery.data?.items ?? [];
   const allTasks = allTasksQuery.data?.items ?? [];
+  const byId = new Map(allTasks.map((t) => [t.id, t]));
   const subtasks = allTasks.filter((t) => t.parent_task_id === task?.id);
-  // Sub-subtasks, keyed by their (subtask) parent id, so each subtask row
-  // below can show its own children inline — a subtask can have children,
-  // but a sub-subtask can't, so this is never looked up more than one level
-  // deep from here.
-  const grandchildrenByParent = new Map<string, typeof allTasks>();
+  // Every non-root task, keyed by its immediate parent id, so each subtask
+  // row can recursively show its own children — covers sub-subtasks and
+  // sub-sub-subtasks alike, at whatever depth they occur.
+  const grandchildrenByParent = new Map<string, Task[]>();
   for (const t of allTasks) {
     if (!t.parent_task_id) continue;
     const list = grandchildrenByParent.get(t.parent_task_id) ?? [];
     list.push(t);
     grandchildrenByParent.set(t.parent_task_id, list);
+  }
+
+  // 0 for a top-level task, 1 for a subtask, and so on — walked locally from
+  // the already-fetched household task list rather than another request.
+  function taskDepth(id: string): number {
+    let depth = 0;
+    let current = byId.get(id);
+    while (current?.parent_task_id) {
+      depth += 1;
+      current = byId.get(current.parent_task_id);
+    }
+    return depth;
   }
 
   const [loadedId, setLoadedId] = useState<string | null>(null);
@@ -221,10 +255,9 @@ export function TaskDetailPage() {
 
   const isCompleted = task.status === "completed";
   const isSubtask = task.parent_task_id !== null;
-  // A subtask may itself have subtasks (sub-subtasks) — but a sub-subtask
-  // may not, since nesting is capped at three levels total. A task is a
-  // sub-subtask when its own parent is itself a subtask.
-  const isSubSubtask = isSubtask && (parentQuery.data?.parent_task_id ?? null) !== null;
+  // A task can have children as long as they'd still fit under the depth
+  // cap — only a task at the deepest allowed level can't.
+  const canHaveSubtasks = taskDepth(task.id) < MAX_TASK_DEPTH - 1;
 
   return (
     <div className="space-y-4 pb-8">
@@ -390,7 +423,7 @@ export function TaskDetailPage() {
         </label>
       </div>
 
-      {!isSubSubtask && (
+      {canHaveSubtasks && (
         <div className="space-y-2 border-t border-slate-100 pt-3">
           <h2 className="text-sm font-semibold text-slate-900">{t("tasks.detail.subtasksTitle")}</h2>
           {subtasks.length === 0 && <p className="text-sm text-slate-400">{t("tasks.empty")}</p>}
@@ -449,10 +482,7 @@ export function TaskDetailPage() {
                               <button
                                 type="button"
                                 aria-label={t("taskCard.deleteTask")}
-                                onClick={() => {
-                                  if (window.confirm(t("tasks.confirmDelete", { title: subtask.title })))
-                                    deleteTask.mutate(subtask.id);
-                                }}
+                                onClick={() => deleteTask.mutate(subtask.id)}
                                 className="shrink-0 rounded-md p-2.5 text-slate-400 hover:bg-slate-100 hover:text-red-600"
                               >
                                 <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
@@ -466,16 +496,19 @@ export function TaskDetailPage() {
                                   <SubSubtaskRow
                                     key={grandchild.id}
                                     task={grandchild}
-                                    onToggleComplete={() =>
+                                    childrenByParent={grandchildrenByParent}
+                                    onToggleComplete={(id) =>
                                       updateTask.mutate({
-                                        id: grandchild.id,
+                                        id,
                                         input: {
                                           status:
-                                            grandchild.status === "completed" ? "pending" : "completed",
+                                            byId.get(id)?.status === "completed"
+                                              ? "pending"
+                                              : "completed",
                                         },
                                       })
                                     }
-                                    onDelete={() => deleteTask.mutate(grandchild.id)}
+                                    onDelete={(id) => deleteTask.mutate(id)}
                                     t={t}
                                   />
                                 ))}

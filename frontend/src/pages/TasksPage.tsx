@@ -44,6 +44,16 @@ type AssigneeFilter = "all" | "mine" | "partner";
 // would span more than one actual sibling group).
 type ListScope = string | "all";
 
+// Levels: task / subtask / sub-subtask / sub-sub-subtask — kept in sync
+// with MAX_TASK_DEPTH in the backend's tasks/service.py.
+const MAX_TASK_DEPTH = 4;
+
+// Dragging a task at least this far to the right while dropping it onto
+// another task nests it as that task's new child instead of reordering —
+// the familiar "drag right to indent" outliner gesture. Comfortably past
+// incidental horizontal jitter during an otherwise-vertical reorder drag.
+const NEST_DRAG_THRESHOLD = 40;
+
 interface TabSlotArgs {
   innerRef: (node: HTMLButtonElement | null) => void;
   style: CSSProperties;
@@ -321,10 +331,10 @@ function CompletedToggle({
 }
 
 // Renders a task and (recursively) its children — used for both root tasks
-// and subtasks, since nesting is capped at three levels total: calling this
-// again for each subtask naturally renders sub-subtasks one indent deeper,
-// and terminates on its own once a level has no children (sub-subtasks
-// never do, enforced backend-side), no depth tracking needed.
+// and subtasks, at whatever depth: calling this again for each subtask
+// naturally renders the next level one indent deeper, and terminates on its
+// own once a level has no children (enforced up to MAX_TASK_DEPTH backend-
+// side), no depth tracking needed here.
 function TaskGroup({
   task,
   subtasksByParent,
@@ -524,12 +534,61 @@ export function TasksPage() {
     for (const subtask of subtasks) idToGroupKey.set(subtask.id, key);
   }
 
+  // 0 for a top-level task, 1 for a subtask, and so on up the parent chain.
+  function taskDepth(id: string): number {
+    let depth = 0;
+    let current = byId.get(id);
+    while (current?.parent_task_id) {
+      depth += 1;
+      current = byId.get(current.parent_task_id);
+    }
+    return depth;
+  }
+
+  // 0 if id has no children, otherwise 1 + its tallest child subtree — how
+  // many further levels would move along with it if id were nested deeper.
+  function subtreeHeight(id: string): number {
+    const children = subtasksByParent.get(id) ?? [];
+    if (children.length === 0) return 0;
+    return 1 + Math.max(...children.map((child) => subtreeHeight(child.id)));
+  }
+
+  function isDescendantOf(ancestorId: string, candidateId: string): boolean {
+    const stack = [...(subtasksByParent.get(ancestorId) ?? [])];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (!current) continue;
+      if (current.id === candidateId) return true;
+      stack.push(...(subtasksByParent.get(current.id) ?? []));
+    }
+    return false;
+  }
+
   function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
+    const { active, over, delta } = event;
     if (!over || active.id === over.id) return;
-    const activeKey = idToGroupKey.get(String(active.id));
-    const overKey = idToGroupKey.get(String(over.id));
-    if (!activeKey || !overKey || activeKey !== overKey) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    const activeKey = idToGroupKey.get(activeId);
+    const overKey = idToGroupKey.get(overId);
+    if (!activeKey || !overKey) return;
+
+    if (delta.x > NEST_DRAG_THRESHOLD) {
+      // Dragged noticeably to the right while dropping onto another task —
+      // nest the dragged task as that task's new child instead of
+      // reordering, regardless of whether the two started out as siblings.
+      // Guard against a cycle (dropping onto your own descendant) and
+      // against exceeding the depth cap (also enforced backend-side, but
+      // checking here avoids a pointless request for an obviously invalid
+      // drop).
+      if (isDescendantOf(activeId, overId)) return;
+      const newDepth = taskDepth(overId) + 1;
+      if (newDepth + subtreeHeight(activeId) > MAX_TASK_DEPTH - 1) return;
+      updateTask.mutate({ id: activeId, input: { parent_task_id: overId } });
+      return;
+    }
+
+    if (activeKey !== overKey) return;
     const group = groups.get(activeKey);
     if (!group) return;
     const oldIndex = group.ids.indexOf(String(active.id));

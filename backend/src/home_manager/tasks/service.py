@@ -59,8 +59,8 @@ class InvalidParentTaskError(AppError):
     code = "INVALID_PARENT_TASK"
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     message = (
-        "parent_task_id must reference a top-level task in the same household with no "
-        "subtasks of its own"
+        "parent_task_id must reference a task in the same household that doesn't exceed the "
+        "nesting depth limit or create a cycle"
     )
 
 
@@ -106,6 +106,35 @@ async def _ensure_list_in_tenant(
         raise InvalidTaskListError()
 
 
+# Levels: task / subtask / sub-subtask / sub-sub-subtask.
+MAX_TASK_DEPTH = 4
+
+
+async def _subtree_height(
+    session: AsyncSession, *, tenant_id: uuid.UUID, task_id: uuid.UUID
+) -> int:
+    """0 if task_id has no children, otherwise 1 + its tallest child subtree.
+
+    Bounded by MAX_TASK_DEPTH in practice — every existing subtree already
+    fits under the cap, so this recursion is never more than a few calls
+    deep.
+    """
+    child_ids = list(
+        (
+            await session.scalars(
+                select(Task.id).where(Task.tenant_id == tenant_id, Task.parent_task_id == task_id)
+            )
+        ).all()
+    )
+    if not child_ids:
+        return 0
+    heights = [
+        await _subtree_height(session, tenant_id=tenant_id, task_id=child_id)
+        for child_id in child_ids
+    ]
+    return 1 + max(heights)
+
+
 async def _resolve_parent_task(
     session: AsyncSession,
     *,
@@ -115,14 +144,12 @@ async def _resolve_parent_task(
 ) -> Task | None:
     """Validates a subtask link and returns the parent (None if unset).
 
-    Nesting is capped at three levels total — task, subtask, sub-subtask —
-    one level deeper than Google Tasks. A task becoming a sub-subtask (its
-    new parent is itself a subtask) is only allowed when that parent's own
-    parent is top-level (caps total depth) and the task has no children of
-    its own (a sub-subtask can't have further children, which would exceed
-    the cap). A task becoming an ordinary subtask (its new parent is
-    top-level) is unrestricted either way — it may already have children,
-    which simply become sub-subtasks.
+    Nesting is capped at MAX_TASK_DEPTH levels total. The task's new depth
+    is its new parent's depth + 1; walking up the parent chain both counts
+    that depth and rejects nesting a task under one of its own descendants
+    (which would otherwise form a cycle). Whatever subtree of children the
+    task already has (if any — relevant on move, since a fresh task never
+    has children yet) must still fit under the cap at the new depth.
     """
     if parent_task_id is None:
         return None
@@ -132,16 +159,25 @@ async def _resolve_parent_task(
     if parent is None or parent.tenant_id != tenant_id:
         raise InvalidParentTaskError()
 
-    if parent.parent_task_id is not None:
-        grandparent = await session.get(Task, parent.parent_task_id)
-        if grandparent is not None and grandparent.parent_task_id is not None:
+    ancestor: Task | None = parent
+    parent_depth = 0
+    while ancestor is not None:
+        if task_id is not None and ancestor.id == task_id:
             raise InvalidParentTaskError()
-        if task_id is not None:
-            has_children = await session.scalar(
-                select(func.count()).select_from(Task).where(Task.parent_task_id == task_id)
-            )
-            if has_children:
-                raise InvalidParentTaskError()
+        if ancestor.parent_task_id is None:
+            break
+        ancestor = await session.get(Task, ancestor.parent_task_id)
+        parent_depth += 1
+
+    new_depth = parent_depth + 1
+    subtree_height = (
+        await _subtree_height(session, tenant_id=tenant_id, task_id=task_id)
+        if task_id is not None
+        else 0
+    )
+    if new_depth + subtree_height > MAX_TASK_DEPTH - 1:
+        raise InvalidParentTaskError()
+
     return parent
 
 

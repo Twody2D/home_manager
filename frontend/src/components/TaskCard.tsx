@@ -163,9 +163,7 @@ export function TaskCard({
       <button
         type="button"
         aria-label={t("taskCard.deleteTask")}
-        onClick={() => {
-          if (window.confirm(t("tasks.confirmDelete", { title: task.title }))) onDelete(task);
-        }}
+        onClick={() => onDelete(task)}
         className="shrink-0 rounded-md p-2.5 text-slate-400 hover:bg-slate-100 hover:text-red-600"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">

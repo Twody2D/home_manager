@@ -85,27 +85,15 @@ describe("TaskCard", () => {
     expect(onToggleComplete).toHaveBeenCalledWith(task);
   });
 
-  it("calls onDelete when the delete button is clicked and confirmed", async () => {
+  it("calls onDelete when the delete button is clicked", async () => {
     const user = userEvent.setup();
     const onDelete = vi.fn();
     const task = makeTask();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderCard(<TaskCard task={task} onToggleComplete={() => {}} onDelete={onDelete} />);
     await user.click(screen.getByRole("button", { name: /delete task/i }));
 
     expect(onDelete).toHaveBeenCalledWith(task);
-  });
-
-  it("does not call onDelete when the delete confirmation is cancelled", async () => {
-    const user = userEvent.setup();
-    const onDelete = vi.fn();
-    vi.spyOn(window, "confirm").mockReturnValue(false);
-
-    renderCard(<TaskCard task={makeTask()} onToggleComplete={() => {}} onDelete={onDelete} />);
-    await user.click(screen.getByRole("button", { name: /delete task/i }));
-
-    expect(onDelete).not.toHaveBeenCalled();
   });
 
   it("renders the assignee name when provided", () => {

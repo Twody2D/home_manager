@@ -512,7 +512,7 @@ async def test_create_sub_subtask_under_a_subtask(
 
 
 @pytest.mark.asyncio
-async def test_create_subtask_rejects_fourth_level_nesting(
+async def test_create_subtask_rejects_fifth_level_nesting(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:
     owner = await register_household(client)
@@ -528,14 +528,20 @@ async def test_create_subtask_rejects_fourth_level_nesting(
         json={"title": "Grandchild", "parent_task_id": child.json()["id"]},
         headers=headers,
     )
-
     great_grandchild = await client.post(
         "/api/v1/tasks",
         json={"title": "Great-grandchild", "parent_task_id": grandchild.json()["id"]},
         headers=headers,
     )
-    assert great_grandchild.status_code == 422
-    assert great_grandchild.json()["error"]["code"] == "INVALID_PARENT_TASK"
+    assert great_grandchild.status_code == 201, great_grandchild.text
+
+    great_great_grandchild = await client.post(
+        "/api/v1/tasks",
+        json={"title": "Great-great-grandchild", "parent_task_id": great_grandchild.json()["id"]},
+        headers=headers,
+    )
+    assert great_great_grandchild.status_code == 422
+    assert great_great_grandchild.json()["error"]["code"] == "INVALID_PARENT_TASK"
 
 
 @pytest.mark.asyncio
@@ -563,7 +569,7 @@ async def test_can_convert_task_with_children_into_an_ordinary_subtask(
 ) -> None:
     # A task with children can become an ordinary (top-level-parented)
     # subtask — its children simply become sub-subtasks, still within the
-    # three-level cap.
+    # four-level cap.
     owner = await register_household(client)
     headers = _auth_headers(owner)
     parent = await client.post("/api/v1/tasks", json={"title": "Parent"}, headers=headers)
@@ -586,17 +592,17 @@ async def test_can_convert_task_with_children_into_an_ordinary_subtask(
 
 
 @pytest.mark.asyncio
-async def test_cannot_convert_task_with_children_into_a_sub_subtask(
+async def test_can_convert_task_with_children_into_a_sub_subtask(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:
     # Converting a task with children into a SUB-subtask (parented under an
-    # existing subtask) would push its children to a fourth level, so it's
-    # still rejected.
+    # existing subtask) pushes its children to a fourth level, which now
+    # fits within the four-level cap.
     owner = await register_household(client)
     headers = _auth_headers(owner)
     parent = await client.post("/api/v1/tasks", json={"title": "Parent"}, headers=headers)
     parent_id = parent.json()["id"]
-    await client.post(
+    child = await client.post(
         "/api/v1/tasks", json={"title": "Child", "parent_task_id": parent_id}, headers=headers
     )
     top = await client.post("/api/v1/tasks", json={"title": "Top"}, headers=headers)
@@ -609,6 +615,62 @@ async def test_cannot_convert_task_with_children_into_a_sub_subtask(
     response = await client.patch(
         f"/api/v1/tasks/{parent_id}",
         json={"parent_task_id": existing_subtask.json()["id"]},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+    refreshed_child = await client.get(f"/api/v1/tasks/{child.json()['id']}", headers=headers)
+    assert refreshed_child.json()["parent_task_id"] == parent_id
+
+
+@pytest.mark.asyncio
+async def test_cannot_convert_task_with_children_into_a_sub_sub_subtask(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    # Converting a task with children into a SUB-SUB-subtask (parented under
+    # an existing sub-subtask) would push its children to a fifth level, so
+    # it's still rejected.
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    parent = await client.post("/api/v1/tasks", json={"title": "Parent"}, headers=headers)
+    parent_id = parent.json()["id"]
+    await client.post(
+        "/api/v1/tasks", json={"title": "Child", "parent_task_id": parent_id}, headers=headers
+    )
+    top = await client.post("/api/v1/tasks", json={"title": "Top"}, headers=headers)
+    sub = await client.post(
+        "/api/v1/tasks", json={"title": "Sub", "parent_task_id": top.json()["id"]}, headers=headers
+    )
+    sub_sub = await client.post(
+        "/api/v1/tasks",
+        json={"title": "SubSub", "parent_task_id": sub.json()["id"]},
+        headers=headers,
+    )
+
+    response = await client.patch(
+        f"/api/v1/tasks/{parent_id}",
+        json={"parent_task_id": sub_sub.json()["id"]},
+        headers=headers,
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_PARENT_TASK"
+
+
+@pytest.mark.asyncio
+async def test_cannot_nest_task_under_its_own_descendant(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    top = await client.post("/api/v1/tasks", json={"title": "Top"}, headers=headers)
+    top_id = top.json()["id"]
+    child = await client.post(
+        "/api/v1/tasks", json={"title": "Child", "parent_task_id": top_id}, headers=headers
+    )
+
+    response = await client.patch(
+        f"/api/v1/tasks/{top_id}",
+        json={"parent_task_id": child.json()["id"]},
         headers=headers,
     )
     assert response.status_code == 422

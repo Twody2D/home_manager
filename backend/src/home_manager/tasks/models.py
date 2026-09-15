@@ -137,8 +137,8 @@ class Task(Base):
     list_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("task_lists.id", ondelete="SET NULL"), nullable=True
     )
-    # Nesting is capped at three levels total (task/subtask/sub-subtask),
-    # enforced in service.py, not the DB.
+    # Nesting is capped at four levels total (task/subtask/sub-subtask/
+    # sub-sub-subtask), enforced in service.py, not the DB.
     parent_task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
     )
