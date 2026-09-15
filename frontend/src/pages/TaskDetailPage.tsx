@@ -10,7 +10,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import type { DragEndEvent } from "@dnd-kit/core";
+import type { DragEndEvent, DragMoveEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { GripIcon } from "../components/TaskCard";
 import { SortableListItem } from "../components/SortableListItem";
@@ -29,6 +29,11 @@ import type { Task, TaskPriority, TaskUpdateInput } from "../api/types";
 // Levels: task / subtask / sub-subtask / sub-sub-subtask — kept in sync
 // with MAX_TASK_DEPTH in the backend's tasks/service.py.
 const MAX_TASK_DEPTH = 4;
+
+// Dragging a subtask at least this far to the right while dropping it onto
+// a sibling nests it under that sibling instead of reordering — see the
+// same gesture (and NEST_DRAG_THRESHOLD) in TasksPage.
+const NEST_DRAG_THRESHOLD = 40;
 
 const PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
@@ -157,6 +162,36 @@ export function TaskDetailPage() {
     return depth;
   }
 
+  // 0 if id has no children, otherwise 1 + its tallest child subtree — see
+  // the same helper in TasksPage.
+  function subtreeHeight(id: string): number {
+    const children = grandchildrenByParent.get(id) ?? [];
+    if (children.length === 0) return 0;
+    return 1 + Math.max(...children.map((child) => subtreeHeight(child.id)));
+  }
+
+  function isDescendantOf(ancestorId: string, candidateId: string): boolean {
+    const stack = [...(grandchildrenByParent.get(ancestorId) ?? [])];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (!current) continue;
+      if (current.id === candidateId) return true;
+      stack.push(...(grandchildrenByParent.get(current.id) ?? []));
+    }
+    return false;
+  }
+
+  // Whether dragging activeId onto overId right now (given how far right
+  // it's been dragged) would nest it under overId — null if not. Shared by
+  // the live drag-move preview and the actual drop handler.
+  function resolveNestTarget(activeId: string, overId: string, deltaX: number): string | null {
+    if (deltaX <= NEST_DRAG_THRESHOLD || activeId === overId) return null;
+    if (isDescendantOf(activeId, overId)) return null;
+    const newDepth = taskDepth(overId) + 1;
+    if (newDepth + subtreeHeight(activeId) > MAX_TASK_DEPTH - 1) return null;
+    return overId;
+  }
+
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -168,6 +203,9 @@ export function TaskDetailPage() {
   // Immediate local reflection of a just-dropped subtask reorder — see the
   // same pattern (and the reason it's needed) in TasksPage.
   const [subtaskOrder, setSubtaskOrder] = useState<string[] | null>(null);
+  // The subtask currently highlighted as the pending drop target for
+  // nesting — see the same pattern in TasksPage.
+  const [nestTargetId, setNestTargetId] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -212,9 +250,28 @@ export function TaskDetailPage() {
     return [...ordered, ...missing];
   })();
 
+  function handleSubtaskDragMove(event: DragMoveEvent) {
+    const { active, over, delta } = event;
+    setNestTargetId(over ? resolveNestTarget(String(active.id), String(over.id), delta.x) : null);
+  }
+
+  function handleSubtaskDragCancel() {
+    setNestTargetId(null);
+  }
+
   function handleSubtaskDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
+    const { active, over, delta } = event;
+    setNestTargetId(null);
     if (!task || !over || active.id === over.id) return;
+
+    const nestTarget = resolveNestTarget(String(active.id), String(over.id), delta.x);
+    if (nestTarget) {
+      // Dragged noticeably to the right while dropping onto a sibling
+      // subtask — nest it under that sibling instead of reordering.
+      updateTask.mutate({ id: String(active.id), input: { parent_task_id: nestTarget } });
+      return;
+    }
+
     const ids = orderedSubtasks.map((s) => s.id);
     const oldIndex = ids.indexOf(String(active.id));
     const newIndex = ids.indexOf(String(over.id));
@@ -431,7 +488,9 @@ export function TaskDetailPage() {
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
+              onDragMove={handleSubtaskDragMove}
               onDragEnd={handleSubtaskDragEnd}
+              onDragCancel={handleSubtaskDragCancel}
             >
               <SortableContext
                 items={orderedSubtasks.map((s) => s.id)}
@@ -444,7 +503,13 @@ export function TaskDetailPage() {
                       <SortableListItem key={subtask.id} id={subtask.id}>
                         {(slot) => (
                           <li ref={slot.innerRef} style={slot.style} className="space-y-1.5">
-                            <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-2">
+                            <div
+                              className={`flex items-center gap-2 rounded-md border px-2 py-2 ${
+                                nestTargetId === subtask.id
+                                  ? "border-blue-400 bg-blue-50 ring-2 ring-blue-400"
+                                  : "border-slate-200 bg-white"
+                              }`}
+                            >
                               <button
                                 type="button"
                                 aria-label={t("taskCard.reorder")}

@@ -10,7 +10,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import type { DragEndEvent } from "@dnd-kit/core";
+import type { DragEndEvent, DragMoveEvent } from "@dnd-kit/core";
 import {
   SortableContext,
   arrayMove,
@@ -342,6 +342,7 @@ function TaskGroup({
   isUpdating,
   onToggleComplete,
   onDelete,
+  nestTargetId,
   nested,
 }: {
   task: Task;
@@ -350,6 +351,7 @@ function TaskGroup({
   isUpdating: boolean;
   onToggleComplete: (task: Task) => void;
   onDelete: (task: Task) => void;
+  nestTargetId: string | null;
   nested?: boolean;
 }) {
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
@@ -379,6 +381,7 @@ function TaskGroup({
               onToggleComplete={onToggleComplete}
               onDelete={onDelete}
               nested={nested}
+              nestPreview={nestTargetId === task.id}
               {...slot}
             />
           )}
@@ -397,6 +400,7 @@ function TaskGroup({
                 isUpdating={isUpdating}
                 onToggleComplete={onToggleComplete}
                 onDelete={onDelete}
+                nestTargetId={nestTargetId}
                 nested
               />
             ))}
@@ -426,6 +430,10 @@ export function TasksPage() {
   // Cleared once that group's mutation settles (the refetched data already
   // matches by then).
   const [localOrder, setLocalOrder] = useState<Record<string, string[]>>({});
+  // The task currently highlighted as the pending drop target for nesting
+  // (set while dragging right over it, cleared on drop/cancel) — gives the
+  // "drag onto to nest" gesture a visible cue instead of being a secret.
+  const [nestTargetId, setNestTargetId] = useState<string | null>(null);
 
   function setActiveListId(listId: ListScope) {
     setSearchParams(listId === "all" ? {} : { list: listId });
@@ -564,8 +572,34 @@ export function TasksPage() {
     return false;
   }
 
+  // Whether dragging activeId onto overId right now (given how far right
+  // it's been dragged) would nest it under overId — null if not. Shared by
+  // the live drag-move preview and the actual drop handler so they always
+  // agree on when nesting would apply.
+  function resolveNestTarget(activeId: string, overId: string, deltaX: number): string | null {
+    if (deltaX <= NEST_DRAG_THRESHOLD || activeId === overId) return null;
+    // Guard against a cycle (dropping onto your own descendant) and against
+    // exceeding the depth cap (also enforced backend-side, but checking
+    // here avoids a pointless request — or a confusing preview highlight —
+    // for an obviously invalid drop).
+    if (isDescendantOf(activeId, overId)) return null;
+    const newDepth = taskDepth(overId) + 1;
+    if (newDepth + subtreeHeight(activeId) > MAX_TASK_DEPTH - 1) return null;
+    return overId;
+  }
+
+  function handleDragMove(event: DragMoveEvent) {
+    const { active, over, delta } = event;
+    setNestTargetId(over ? resolveNestTarget(String(active.id), String(over.id), delta.x) : null);
+  }
+
+  function handleDragCancel() {
+    setNestTargetId(null);
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over, delta } = event;
+    setNestTargetId(null);
     if (!over || active.id === over.id) return;
     const activeId = String(active.id);
     const overId = String(over.id);
@@ -573,18 +607,12 @@ export function TasksPage() {
     const overKey = idToGroupKey.get(overId);
     if (!activeKey || !overKey) return;
 
-    if (delta.x > NEST_DRAG_THRESHOLD) {
+    const nestTarget = resolveNestTarget(activeId, overId, delta.x);
+    if (nestTarget) {
       // Dragged noticeably to the right while dropping onto another task —
       // nest the dragged task as that task's new child instead of
       // reordering, regardless of whether the two started out as siblings.
-      // Guard against a cycle (dropping onto your own descendant) and
-      // against exceeding the depth cap (also enforced backend-side, but
-      // checking here avoids a pointless request for an obviously invalid
-      // drop).
-      if (isDescendantOf(activeId, overId)) return;
-      const newDepth = taskDepth(overId) + 1;
-      if (newDepth + subtreeHeight(activeId) > MAX_TASK_DEPTH - 1) return;
-      updateTask.mutate({ id: activeId, input: { parent_task_id: overId } });
+      updateTask.mutate({ id: activeId, input: { parent_task_id: nestTarget } });
       return;
     }
 
@@ -683,7 +711,13 @@ export function TasksPage() {
             <p className="text-sm text-slate-500">{t("tasks.empty")}</p>
           ) : (
             <>
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragMove={handleDragMove}
+                onDragEnd={handleDragEnd}
+                onDragCancel={handleDragCancel}
+              >
                 <div className="space-y-4">
                   {rootSections.map((section) => (
                     <div key={section.key} className="space-y-2">
@@ -706,6 +740,7 @@ export function TasksPage() {
                               isUpdating={updateTask.isPending}
                               onToggleComplete={handleToggleComplete}
                               onDelete={(t) => deleteTask.mutate(t.id)}
+                              nestTargetId={nestTargetId}
                             />
                           ))}
                         </ul>

@@ -39,6 +39,10 @@ interface TaskCardProps {
   onDelete: (task: Task) => void;
   isUpdating?: boolean;
   nested?: boolean;
+  // True while another task is being dragged and would be nested under
+  // this one if dropped right now — highlights the card as the pending
+  // drop target so the "drag onto to nest" gesture is discoverable.
+  nestPreview?: boolean;
   // Applied to the root <li> by a dnd-kit useSortable() wrapper in the
   // caller — kept generic here so this component doesn't need to know
   // about dnd-kit's own types.
@@ -57,6 +61,7 @@ export function TaskCard({
   onDelete,
   isUpdating,
   nested,
+  nestPreview,
   innerRef,
   style,
   dragHandleProps,
@@ -68,9 +73,9 @@ export function TaskCard({
     <li
       ref={innerRef}
       style={style}
-      className={`flex items-center gap-2 rounded-lg border border-slate-200 bg-white shadow-sm ${
-        nested ? "py-1.5 pl-1.5 pr-2" : "py-2 pl-2 pr-2.5"
-      }`}
+      className={`flex items-center gap-2 rounded-lg border shadow-sm ${
+        nestPreview ? "border-blue-400 bg-blue-50 ring-2 ring-blue-400" : "border-slate-200 bg-white"
+      } ${nested ? "py-1.5 pl-1.5 pr-2" : "py-2 pl-2 pr-2.5"}`}
     >
       {dragHandleProps && (
         <button
