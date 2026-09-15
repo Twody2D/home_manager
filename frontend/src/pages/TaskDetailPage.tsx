@@ -41,6 +41,53 @@ function FieldLabel({ children }: { children: string }) {
   return <span className="mb-1 block text-xs font-medium text-slate-600">{children}</span>;
 }
 
+// A sub-subtask row nested under its subtask — shown so the tree is visible
+// without drilling in, but without drag support (that stays available by
+// opening the subtask's own detail page, since sub-subtasks can't have
+// children of their own to make a deeper tree worth rendering here).
+function SubSubtaskRow({
+  task,
+  onToggleComplete,
+  onDelete,
+  t,
+}: {
+  task: { id: string; title: string; status: string };
+  onToggleComplete: () => void;
+  onDelete: () => void;
+  t: (key: string) => string;
+}) {
+  const isCompleted = task.status === "completed";
+  return (
+    <li className="flex items-center gap-2 rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5">
+      <button
+        type="button"
+        onClick={onToggleComplete}
+        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+          isCompleted ? "border-blue-600 bg-blue-600" : "border-slate-300"
+        }`}
+      />
+      <Link
+        to={`/tasks/${task.id}`}
+        className={`flex-1 truncate text-sm ${
+          isCompleted ? "text-slate-400 line-through" : "text-slate-700"
+        }`}
+      >
+        {task.title}
+      </Link>
+      <button
+        type="button"
+        aria-label={t("taskCard.deleteTask")}
+        onClick={onDelete}
+        className="shrink-0 rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-red-600"
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+          <path d="M8 2a1 1 0 0 0-1 1v1H4a1 1 0 0 0 0 2h.35l.65 10.02A2 2 0 0 0 6.99 18h6.02a2 2 0 0 0 2-1.98L15.65 6H16a1 1 0 1 0 0-2h-3V3a1 1 0 0 0-1-1H8Zm1 2V3h2v1H9Zm-1.63 2h7.26l-.63 9.9a.5.5 0 0 1-.5.1H7.5a.5.5 0 0 1-.5-.1L6.37 6Z" />
+        </svg>
+      </button>
+    </li>
+  );
+}
+
 export function TaskDetailPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -60,7 +107,19 @@ export function TaskDetailPage() {
 
   const members = membersQuery.data ?? [];
   const taskLists = taskListsQuery.data?.items ?? [];
-  const subtasks = (allTasksQuery.data?.items ?? []).filter((t) => t.parent_task_id === task?.id);
+  const allTasks = allTasksQuery.data?.items ?? [];
+  const subtasks = allTasks.filter((t) => t.parent_task_id === task?.id);
+  // Sub-subtasks, keyed by their (subtask) parent id, so each subtask row
+  // below can show its own children inline — a subtask can have children,
+  // but a sub-subtask can't, so this is never looked up more than one level
+  // deep from here.
+  const grandchildrenByParent = new Map<string, typeof allTasks>();
+  for (const t of allTasks) {
+    if (!t.parent_task_id) continue;
+    const list = grandchildrenByParent.get(t.parent_task_id) ?? [];
+    list.push(t);
+    grandchildrenByParent.set(t.parent_task_id, list);
+  }
 
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -343,60 +402,84 @@ export function TaskDetailPage() {
                 strategy={verticalListSortingStrategy}
               >
                 <ul className="space-y-1.5">
-                  {orderedSubtasks.map((subtask) => (
-                    <SortableListItem key={subtask.id} id={subtask.id}>
-                      {(slot) => (
-                        <li
-                          ref={slot.innerRef}
-                          style={slot.style}
-                          className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-2"
-                        >
-                          <button
-                            type="button"
-                            aria-label={t("taskCard.reorder")}
-                            className="flex h-9 w-8 shrink-0 touch-none items-center justify-center text-slate-300 hover:text-slate-500"
-                            {...slot.dragHandleProps}
-                          >
-                            <GripIcon />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateTask.mutate({
-                                id: subtask.id,
-                                input: { status: subtask.status === "completed" ? "pending" : "completed" },
-                              })
-                            }
-                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
-                              subtask.status === "completed"
-                                ? "border-blue-600 bg-blue-600"
-                                : "border-slate-300"
-                            }`}
-                          />
-                          <Link
-                            to={`/tasks/${subtask.id}`}
-                            className={`flex-1 truncate text-sm ${
-                              subtask.status === "completed"
-                                ? "text-slate-400 line-through"
-                                : "text-slate-900"
-                            }`}
-                          >
-                            {subtask.title}
-                          </Link>
-                          <button
-                            type="button"
-                            aria-label={t("taskCard.deleteTask")}
-                            onClick={() => deleteTask.mutate(subtask.id)}
-                            className="shrink-0 rounded-md p-2.5 text-slate-400 hover:bg-slate-100 hover:text-red-600"
-                          >
-                            <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                              <path d="M8 2a1 1 0 0 0-1 1v1H4a1 1 0 0 0 0 2h.35l.65 10.02A2 2 0 0 0 6.99 18h6.02a2 2 0 0 0 2-1.98L15.65 6H16a1 1 0 1 0 0-2h-3V3a1 1 0 0 0-1-1H8Zm1 2V3h2v1H9Zm-1.63 2h7.26l-.63 9.9a.5.5 0 0 1-.5.1H7.5a.5.5 0 0 1-.5-.1L6.37 6Z" />
-                            </svg>
-                          </button>
-                        </li>
-                      )}
-                    </SortableListItem>
-                  ))}
+                  {orderedSubtasks.map((subtask) => {
+                    const grandchildren = grandchildrenByParent.get(subtask.id) ?? [];
+                    return (
+                      <SortableListItem key={subtask.id} id={subtask.id}>
+                        {(slot) => (
+                          <li ref={slot.innerRef} style={slot.style} className="space-y-1.5">
+                            <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-2">
+                              <button
+                                type="button"
+                                aria-label={t("taskCard.reorder")}
+                                className="flex h-9 w-8 shrink-0 touch-none items-center justify-center text-slate-300 hover:text-slate-500"
+                                {...slot.dragHandleProps}
+                              >
+                                <GripIcon />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updateTask.mutate({
+                                    id: subtask.id,
+                                    input: {
+                                      status: subtask.status === "completed" ? "pending" : "completed",
+                                    },
+                                  })
+                                }
+                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                                  subtask.status === "completed"
+                                    ? "border-blue-600 bg-blue-600"
+                                    : "border-slate-300"
+                                }`}
+                              />
+                              <Link
+                                to={`/tasks/${subtask.id}`}
+                                className={`flex-1 truncate text-sm ${
+                                  subtask.status === "completed"
+                                    ? "text-slate-400 line-through"
+                                    : "text-slate-900"
+                                }`}
+                              >
+                                {subtask.title}
+                              </Link>
+                              <button
+                                type="button"
+                                aria-label={t("taskCard.deleteTask")}
+                                onClick={() => deleteTask.mutate(subtask.id)}
+                                className="shrink-0 rounded-md p-2.5 text-slate-400 hover:bg-slate-100 hover:text-red-600"
+                              >
+                                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                                  <path d="M8 2a1 1 0 0 0-1 1v1H4a1 1 0 0 0 0 2h.35l.65 10.02A2 2 0 0 0 6.99 18h6.02a2 2 0 0 0 2-1.98L15.65 6H16a1 1 0 1 0 0-2h-3V3a1 1 0 0 0-1-1H8Zm1 2V3h2v1H9Zm-1.63 2h7.26l-.63 9.9a.5.5 0 0 1-.5.1H7.5a.5.5 0 0 1-.5-.1L6.37 6Z" />
+                                </svg>
+                              </button>
+                            </div>
+                            {grandchildren.length > 0 && (
+                              <ul className="ml-6 space-y-1 border-l border-slate-200 pl-3">
+                                {grandchildren.map((grandchild) => (
+                                  <SubSubtaskRow
+                                    key={grandchild.id}
+                                    task={grandchild}
+                                    onToggleComplete={() =>
+                                      updateTask.mutate({
+                                        id: grandchild.id,
+                                        input: {
+                                          status:
+                                            grandchild.status === "completed" ? "pending" : "completed",
+                                        },
+                                      })
+                                    }
+                                    onDelete={() => deleteTask.mutate(grandchild.id)}
+                                    t={t}
+                                  />
+                                ))}
+                              </ul>
+                            )}
+                          </li>
+                        )}
+                      </SortableListItem>
+                    );
+                  })}
                 </ul>
               </SortableContext>
             </DndContext>

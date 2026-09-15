@@ -320,23 +320,31 @@ function CompletedToggle({
   );
 }
 
+// Renders a task and (recursively) its children — used for both root tasks
+// and subtasks, since nesting is capped at three levels total: calling this
+// again for each subtask naturally renders sub-subtasks one indent deeper,
+// and terminates on its own once a level has no children (sub-subtasks
+// never do, enforced backend-side), no depth tracking needed.
 function TaskGroup({
   task,
-  subtasks,
+  subtasksByParent,
   membersById,
   isUpdating,
   onToggleComplete,
   onDelete,
+  nested,
 }: {
   task: Task;
-  subtasks: Task[];
+  subtasksByParent: Map<string, Task[]>;
   membersById: Map<string, User>;
   isUpdating: boolean;
   onToggleComplete: (task: Task) => void;
   onDelete: (task: Task) => void;
+  nested?: boolean;
 }) {
   const [showCompleted, setShowCompleted] = useState(false);
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
+  const subtasks = subtasksByParent.get(task.id) ?? [];
   const { active: activeSubtasks, completed: completedSubtasks } = splitByStatus(subtasks);
   const hasSubtasks = subtasks.length > 0;
 
@@ -359,6 +367,7 @@ function TaskGroup({
               isUpdating={isUpdating}
               onToggleComplete={onToggleComplete}
               onDelete={onDelete}
+              nested={nested}
               {...slot}
             />
           )}
@@ -369,19 +378,16 @@ function TaskGroup({
         <ul className="ml-6 space-y-1.5 border-l border-slate-200 pl-3">
           <SortableContext items={activeSubtasks.map((s) => s.id)} strategy={verticalListSortingStrategy}>
             {activeSubtasks.map((subtask) => (
-              <SortableListItem key={subtask.id} id={subtask.id}>
-                {(slot) => (
-                  <TaskCard
-                    task={subtask}
-                    assignee={subtask.assigned_to ? membersById.get(subtask.assigned_to) : undefined}
-                    isUpdating={isUpdating}
-                    onToggleComplete={onToggleComplete}
-                    onDelete={onDelete}
-                    nested
-                    {...slot}
-                  />
-                )}
-              </SortableListItem>
+              <TaskGroup
+                key={subtask.id}
+                task={subtask}
+                subtasksByParent={subtasksByParent}
+                membersById={membersById}
+                isUpdating={isUpdating}
+                onToggleComplete={onToggleComplete}
+                onDelete={onDelete}
+                nested
+              />
             ))}
           </SortableContext>
           <CompletedToggle
@@ -652,7 +658,7 @@ export function TasksPage() {
                             <TaskGroup
                               key={task.id}
                               task={task}
-                              subtasks={subtasksByParent.get(task.id) ?? []}
+                              subtasksByParent={subtasksByParent}
                               membersById={membersById}
                               isUpdating={updateTask.isPending}
                               onToggleComplete={handleToggleComplete}
