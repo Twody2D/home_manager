@@ -487,7 +487,7 @@ async def test_create_subtask_inherits_parent_list(
 
 
 @pytest.mark.asyncio
-async def test_create_subtask_rejects_nested_parent(
+async def test_create_sub_subtask_under_a_subtask(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:
     owner = await register_household(client)
@@ -504,8 +504,38 @@ async def test_create_subtask_rejects_nested_parent(
         json={"title": "Grandchild", "parent_task_id": child.json()["id"]},
         headers=headers,
     )
-    assert grandchild.status_code == 422
-    assert grandchild.json()["error"]["code"] == "INVALID_PARENT_TASK"
+    assert grandchild.status_code == 201, grandchild.text
+    assert grandchild.json()["parent_task_id"] == child.json()["id"]
+    # A sub-subtask inherits the top-level task's list, transitively through
+    # its immediate (subtask) parent.
+    assert grandchild.json()["list_id"] == parent.json()["list_id"]
+
+
+@pytest.mark.asyncio
+async def test_create_subtask_rejects_fourth_level_nesting(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    parent = await client.post("/api/v1/tasks", json={"title": "Parent"}, headers=headers)
+    child = await client.post(
+        "/api/v1/tasks",
+        json={"title": "Child", "parent_task_id": parent.json()["id"]},
+        headers=headers,
+    )
+    grandchild = await client.post(
+        "/api/v1/tasks",
+        json={"title": "Grandchild", "parent_task_id": child.json()["id"]},
+        headers=headers,
+    )
+
+    great_grandchild = await client.post(
+        "/api/v1/tasks",
+        json={"title": "Great-grandchild", "parent_task_id": grandchild.json()["id"]},
+        headers=headers,
+    )
+    assert great_grandchild.status_code == 422
+    assert great_grandchild.json()["error"]["code"] == "INVALID_PARENT_TASK"
 
 
 @pytest.mark.asyncio
@@ -528,14 +558,17 @@ async def test_create_subtask_rejects_parent_outside_tenant(
 
 
 @pytest.mark.asyncio
-async def test_cannot_convert_task_with_children_into_a_subtask(
+async def test_can_convert_task_with_children_into_an_ordinary_subtask(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:
+    # A task with children can become an ordinary (top-level-parented)
+    # subtask — its children simply become sub-subtasks, still within the
+    # three-level cap.
     owner = await register_household(client)
     headers = _auth_headers(owner)
     parent = await client.post("/api/v1/tasks", json={"title": "Parent"}, headers=headers)
     parent_id = parent.json()["id"]
-    await client.post(
+    child = await client.post(
         "/api/v1/tasks", json={"title": "Child", "parent_task_id": parent_id}, headers=headers
     )
     other = await client.post("/api/v1/tasks", json={"title": "Other"}, headers=headers)
@@ -543,6 +576,39 @@ async def test_cannot_convert_task_with_children_into_a_subtask(
     response = await client.patch(
         f"/api/v1/tasks/{parent_id}",
         json={"parent_task_id": other.json()["id"]},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["parent_task_id"] == other.json()["id"]
+
+    refreshed_child = await client.get(f"/api/v1/tasks/{child.json()['id']}", headers=headers)
+    assert refreshed_child.json()["parent_task_id"] == parent_id
+
+
+@pytest.mark.asyncio
+async def test_cannot_convert_task_with_children_into_a_sub_subtask(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    # Converting a task with children into a SUB-subtask (parented under an
+    # existing subtask) would push its children to a fourth level, so it's
+    # still rejected.
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    parent = await client.post("/api/v1/tasks", json={"title": "Parent"}, headers=headers)
+    parent_id = parent.json()["id"]
+    await client.post(
+        "/api/v1/tasks", json={"title": "Child", "parent_task_id": parent_id}, headers=headers
+    )
+    top = await client.post("/api/v1/tasks", json={"title": "Top"}, headers=headers)
+    existing_subtask = await client.post(
+        "/api/v1/tasks",
+        json={"title": "Existing subtask", "parent_task_id": top.json()["id"]},
+        headers=headers,
+    )
+
+    response = await client.patch(
+        f"/api/v1/tasks/{parent_id}",
+        json={"parent_task_id": existing_subtask.json()["id"]},
         headers=headers,
     )
     assert response.status_code == 422
@@ -658,6 +724,42 @@ async def test_reorder_subtasks_independently_of_parent_group(
     assert [item["id"] for item in response.json()] == [
         child_b.json()["id"],
         child_a.json()["id"],
+    ]
+
+
+@pytest.mark.asyncio
+async def test_reorder_sub_subtasks(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    parent = await client.post("/api/v1/tasks", json={"title": "Parent"}, headers=headers)
+    child = await client.post(
+        "/api/v1/tasks",
+        json={"title": "Child", "parent_task_id": parent.json()["id"]},
+        headers=headers,
+    )
+    child_id = child.json()["id"]
+    grand_a = await client.post(
+        "/api/v1/tasks", json={"title": "Grand A", "parent_task_id": child_id}, headers=headers
+    )
+    grand_b = await client.post(
+        "/api/v1/tasks", json={"title": "Grand B", "parent_task_id": child_id}, headers=headers
+    )
+
+    response = await client.patch(
+        "/api/v1/tasks/reorder",
+        json={
+            "list_id": None,
+            "parent_task_id": child_id,
+            "ordered_ids": [grand_b.json()["id"], grand_a.json()["id"]],
+        },
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert [item["id"] for item in response.json()] == [
+        grand_b.json()["id"],
+        grand_a.json()["id"],
     ]
 
 

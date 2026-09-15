@@ -36,13 +36,7 @@ import {
 } from "../hooks/useTasks";
 import { useMembers } from "../hooks/useMembers";
 import { useAuth } from "../auth/useAuth";
-import type { Task, TaskList, TaskStatus, User } from "../api/types";
-
-const FILTERS: { labelKey: string; value: TaskStatus | "all" }[] = [
-  { labelKey: "tasks.filterAll", value: "all" },
-  { labelKey: "tasks.filterPending", value: "pending" },
-  { labelKey: "tasks.filterCompleted", value: "completed" },
-];
+import type { Task, TaskList, User } from "../api/types";
 
 type AssigneeFilter = "all" | "mine" | "partner";
 // "all" = every list combined (drag-and-drop is only enabled here when the
@@ -145,7 +139,7 @@ function TaskListTabs({
         <button
           type="button"
           onClick={() => onSelect("all")}
-          className={`rounded-full px-3 py-1 text-sm font-medium ${
+          className={`rounded-full px-3.5 py-2 text-sm font-medium ${
             activeListId === "all" ? "bg-blue-600 text-white" : "bg-white text-slate-600"
           }`}
         >
@@ -165,7 +159,7 @@ function TaskListTabs({
                     style={slot.style}
                     type="button"
                     onClick={() => onSelect(list.id)}
-                    className={`touch-none rounded-full px-3 py-1 text-sm font-medium ${
+                    className={`touch-none rounded-full px-3.5 py-2 text-sm font-medium ${
                       activeListId === list.id ? "bg-blue-600 text-white" : "bg-white text-slate-600"
                     }`}
                     {...slot.dragHandleProps}
@@ -210,7 +204,7 @@ function TaskListTabs({
           <button
             type="button"
             onClick={() => setIsAdding(true)}
-            className="rounded-full border border-dashed border-slate-300 px-3 py-1 text-sm font-medium text-slate-500 hover:bg-slate-50"
+            className="rounded-full border border-dashed border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50"
           >
             + {t("tasks.addList")}
           </button>
@@ -228,7 +222,7 @@ function TaskListTabs({
               type="button"
               aria-label={t("tasks.listMenu")}
               onClick={() => setMenuOpen((open) => !open)}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
             >
               <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
                 <circle cx="10" cy="4" r="1.6" />
@@ -333,7 +327,6 @@ function TaskGroup({
   isUpdating,
   onToggleComplete,
   onDelete,
-  rootDragDisabled,
 }: {
   task: Task;
   subtasks: Task[];
@@ -341,7 +334,6 @@ function TaskGroup({
   isUpdating: boolean;
   onToggleComplete: (task: Task) => void;
   onDelete: (task: Task) => void;
-  rootDragDisabled: boolean;
 }) {
   const [showCompleted, setShowCompleted] = useState(false);
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
@@ -351,7 +343,7 @@ function TaskGroup({
   return (
     <li className="space-y-1.5">
       <ul>
-        <SortableListItem id={task.id} disabled={rootDragDisabled}>
+        <SortableListItem id={task.id}>
           {(slot) => (
             <TaskCard
               task={task}
@@ -424,7 +416,6 @@ interface SiblingGroup {
 export function TasksPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const [filter, setFilter] = useState<TaskStatus | "all">("all");
   const [assigneeFilter, setAssigneeFilter] = useState<AssigneeFilter>("all");
   const [searchParams, setSearchParams] = useSearchParams();
   const activeListId: ListScope = searchParams.get("list") ?? "all";
@@ -451,7 +442,6 @@ export function TasksPage() {
   const assignedTo =
     assigneeFilter === "mine" ? user?.id : assigneeFilter === "partner" ? partner?.id : undefined;
   const tasksQuery = useTasks({
-    ...(filter === "all" ? {} : { status: filter }),
     ...(assignedTo ? { assigned_to: assignedTo } : {}),
     limit: 100,
   });
@@ -499,21 +489,43 @@ export function TasksPage() {
     ),
     "root",
   );
-  const { active: activeRootTasks, completed: completedRootTasks } = splitByStatus(rootTasks);
+  const { completed: completedRootTasks } = splitByStatus(rootTasks);
 
-  // "Все задачи" spans more than one actual list group as soon as more than
-  // one list_id shows up among the visible tasks — drag only stays
-  // meaningful (and only stays enabled) while they're really one sibling
-  // group, e.g. before any folder has been created yet.
-  const uniqueListIds = new Set(rootTasks.map((t) => t.list_id));
-  const rootDragDisabled = activeListId === "all" && uniqueListIds.size > 1;
-  const rootGroupListId = activeListId === "all" ? (rootTasks[0]?.list_id ?? null) : activeListId;
+  // Reordering only ever makes sense within one real (list_id, null) sibling
+  // group, so the "Все задачи" view is rendered as one section per list
+  // (default bucket first, then each folder in tab order) rather than one
+  // flat merged list — that keeps every task genuinely draggable, including
+  // in "Все задачи", instead of disabling drag whenever more than one list
+  // is visible at once. Selecting a single folder tab naturally yields
+  // exactly one section here, so this is also the single-group case.
+  const rootTasksByList = new Map<string | null, Task[]>();
+  for (const task of rootTasks) {
+    const list = rootTasksByList.get(task.list_id) ?? [];
+    list.push(task);
+    rootTasksByList.set(task.list_id, list);
+  }
+  const listSectionOrder: (string | null)[] = [null, ...taskLists.map((l) => l.id)];
+  const rootSections = listSectionOrder
+    .filter((listId) => rootTasksByList.has(listId))
+    .map((listId) => {
+      const key = `root:${listId ?? "none"}`;
+      const fullTasks = applyOrder(rootTasksByList.get(listId) ?? [], key);
+      const { active } = splitByStatus(fullTasks);
+      return {
+        key,
+        listId,
+        label: listId === null ? t("tasks.myTasks") : (taskLists.find((l) => l.id === listId)?.name ?? ""),
+        fullTasks,
+        activeTasks: active,
+      };
+    });
+  const showSectionHeaders = rootSections.length > 1;
 
   const groups = new Map<string, SiblingGroup>();
-  groups.set("root", { listId: rootGroupListId, parentId: null, ids: rootTasks.map((t) => t.id) });
   const idToGroupKey = new Map<string, string>();
-  if (!rootDragDisabled) {
-    for (const task of rootTasks) idToGroupKey.set(task.id, "root");
+  for (const section of rootSections) {
+    groups.set(section.key, { listId: section.listId, parentId: null, ids: section.fullTasks.map((t) => t.id) });
+    for (const task of section.fullTasks) idToGroupKey.set(task.id, section.key);
   }
   for (const [parentId, subtasks] of subtasksByParent) {
     const key = `sub:${parentId}`;
@@ -559,11 +571,11 @@ export function TasksPage() {
     <div className="space-y-4">
       <h1 className="text-lg font-semibold text-slate-900">{t("tasks.title")}</h1>
 
-      <div className="flex gap-1">
+      <div className="flex gap-1.5">
         <button
           type="button"
           onClick={() => setAssigneeFilter("all")}
-          className={`rounded-full px-3 py-1 text-sm font-medium ${
+          className={`rounded-full px-3.5 py-2 text-sm font-medium ${
             assigneeFilter === "all" ? "bg-blue-600 text-white" : "bg-white text-slate-600"
           }`}
         >
@@ -572,7 +584,7 @@ export function TasksPage() {
         <button
           type="button"
           onClick={() => setAssigneeFilter("mine")}
-          className={`rounded-full px-3 py-1 text-sm font-medium ${
+          className={`rounded-full px-3.5 py-2 text-sm font-medium ${
             assigneeFilter === "mine" ? "bg-blue-600 text-white" : "bg-white text-slate-600"
           }`}
         >
@@ -582,7 +594,7 @@ export function TasksPage() {
           <button
             type="button"
             onClick={() => setAssigneeFilter("partner")}
-            className={`rounded-full px-3 py-1 text-sm font-medium ${
+            className={`rounded-full px-3.5 py-2 text-sm font-medium ${
               assigneeFilter === "partner" ? "bg-blue-600 text-white" : "bg-white text-slate-600"
             }`}
           >
@@ -597,7 +609,7 @@ export function TasksPage() {
         <button
           type="button"
           onClick={() => setIsAddingTask(true)}
-          className="w-full rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-left text-sm font-medium text-slate-500 hover:bg-slate-50"
+          className="w-full rounded-lg border border-dashed border-slate-300 bg-white px-3 py-3 text-left text-sm font-medium text-slate-500 hover:bg-slate-50"
         >
           + {t("tasks.quickAdd")}
         </button>
@@ -613,21 +625,6 @@ export function TasksPage() {
         />
       )}
 
-      <div className="flex gap-1">
-        {FILTERS.map((f) => (
-          <button
-            key={f.value}
-            type="button"
-            onClick={() => setFilter(f.value)}
-            className={`rounded-full px-3 py-1 text-sm font-medium ${
-              filter === f.value ? "bg-blue-600 text-white" : "bg-white text-slate-600"
-            }`}
-          >
-            {t(f.labelKey)}
-          </button>
-        ))}
-      </div>
-
       {tasksQuery.isLoading && <p className="text-sm text-slate-500">{t("tasks.loading")}</p>}
       {tasksQuery.isError && <p className="text-sm text-red-600">{t("tasks.error")}</p>}
 
@@ -638,25 +635,35 @@ export function TasksPage() {
           ) : (
             <>
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext
-                  items={rootDragDisabled ? [] : activeRootTasks.map((t) => t.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <ul className="space-y-3">
-                    {activeRootTasks.map((task) => (
-                      <TaskGroup
-                        key={task.id}
-                        task={task}
-                        subtasks={subtasksByParent.get(task.id) ?? []}
-                        membersById={membersById}
-                        isUpdating={updateTask.isPending}
-                        onToggleComplete={handleToggleComplete}
-                        onDelete={(t) => deleteTask.mutate(t.id)}
-                        rootDragDisabled={rootDragDisabled}
-                      />
-                    ))}
-                  </ul>
-                </SortableContext>
+                <div className="space-y-4">
+                  {rootSections.map((section) => (
+                    <div key={section.key} className="space-y-2">
+                      {showSectionHeaders && (
+                        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          {section.label}
+                        </h2>
+                      )}
+                      <SortableContext
+                        items={section.activeTasks.map((t) => t.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <ul className="space-y-3">
+                          {section.activeTasks.map((task) => (
+                            <TaskGroup
+                              key={task.id}
+                              task={task}
+                              subtasks={subtasksByParent.get(task.id) ?? []}
+                              membersById={membersById}
+                              isUpdating={updateTask.isPending}
+                              onToggleComplete={handleToggleComplete}
+                              onDelete={(t) => deleteTask.mutate(t.id)}
+                            />
+                          ))}
+                        </ul>
+                      </SortableContext>
+                    </div>
+                  ))}
+                </div>
               </DndContext>
 
               {completedRootTasks.length > 0 && (

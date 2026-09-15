@@ -115,25 +115,33 @@ async def _resolve_parent_task(
 ) -> Task | None:
     """Validates a subtask link and returns the parent (None if unset).
 
-    Nesting is capped at one level, the same as Google Tasks: the parent
-    must be a top-level task (no parent of its own), and — to stop a
-    top-level task with existing children from being turned into a subtask,
-    which would silently produce a third level — it must have no children
-    of its own either.
+    Nesting is capped at three levels total — task, subtask, sub-subtask —
+    one level deeper than Google Tasks. A task becoming a sub-subtask (its
+    new parent is itself a subtask) is only allowed when that parent's own
+    parent is top-level (caps total depth) and the task has no children of
+    its own (a sub-subtask can't have further children, which would exceed
+    the cap). A task becoming an ordinary subtask (its new parent is
+    top-level) is unrestricted either way — it may already have children,
+    which simply become sub-subtasks.
     """
     if parent_task_id is None:
         return None
     if parent_task_id == task_id:
         raise InvalidParentTaskError()
     parent = await session.get(Task, parent_task_id)
-    if parent is None or parent.tenant_id != tenant_id or parent.parent_task_id is not None:
+    if parent is None or parent.tenant_id != tenant_id:
         raise InvalidParentTaskError()
-    if task_id is not None:
-        has_children = await session.scalar(
-            select(func.count()).select_from(Task).where(Task.parent_task_id == task_id)
-        )
-        if has_children:
+
+    if parent.parent_task_id is not None:
+        grandparent = await session.get(Task, parent.parent_task_id)
+        if grandparent is not None and grandparent.parent_task_id is not None:
             raise InvalidParentTaskError()
+        if task_id is not None:
+            has_children = await session.scalar(
+                select(func.count()).select_from(Task).where(Task.parent_task_id == task_id)
+            )
+            if has_children:
+                raise InvalidParentTaskError()
     return parent
 
 

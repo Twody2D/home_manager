@@ -159,13 +159,17 @@ export function TaskDetailPage() {
 
   const isCompleted = task.status === "completed";
   const isSubtask = task.parent_task_id !== null;
+  // A subtask may itself have subtasks (sub-subtasks) — but a sub-subtask
+  // may not, since nesting is capped at three levels total. A task is a
+  // sub-subtask when its own parent is itself a subtask.
+  const isSubSubtask = isSubtask && (parentQuery.data?.parent_task_id ?? null) !== null;
 
   return (
     <div className="space-y-4 pb-8">
       <button
         type="button"
         onClick={() => navigate(-1)}
-        className="flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700"
+        className="-mx-2 flex items-center gap-1 px-2 py-2 text-sm font-medium text-slate-500 hover:text-slate-700"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
           <path d="M12.7 4.3a1 1 0 0 1 0 1.4L8.42 10l4.3 4.3a1 1 0 1 1-1.42 1.4l-5-5a1 1 0 0 1 0-1.4l5-5a1 1 0 0 1 1.42 0Z" />
@@ -308,7 +312,7 @@ export function TaskDetailPage() {
         </label>
 
         <label className="block text-sm">
-          <FieldLabel>{t("tasks.budget.shared")}</FieldLabel>
+          <FieldLabel>{t("tasks.budget.owner")}</FieldLabel>
           <select
             value={task.budget_owner_user_id ?? ""}
             onChange={(e) => save({ budget_owner_user_id: e.target.value || null })}
@@ -324,7 +328,7 @@ export function TaskDetailPage() {
         </label>
       </div>
 
-      {!isSubtask && (
+      {!isSubSubtask && (
         <div className="space-y-2 border-t border-slate-100 pt-3">
           <h2 className="text-sm font-semibold text-slate-900">{t("tasks.detail.subtasksTitle")}</h2>
           {subtasks.length === 0 && <p className="text-sm text-slate-400">{t("tasks.empty")}</p>}
@@ -345,12 +349,12 @@ export function TaskDetailPage() {
                         <li
                           ref={slot.innerRef}
                           style={slot.style}
-                          className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5"
+                          className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-2"
                         >
                           <button
                             type="button"
                             aria-label={t("taskCard.reorder")}
-                            className="flex h-6 w-5 shrink-0 touch-none items-center justify-center text-slate-300 hover:text-slate-500"
+                            className="flex h-9 w-8 shrink-0 touch-none items-center justify-center text-slate-300 hover:text-slate-500"
                             {...slot.dragHandleProps}
                           >
                             <GripIcon />
@@ -363,7 +367,7 @@ export function TaskDetailPage() {
                                 input: { status: subtask.status === "completed" ? "pending" : "completed" },
                               })
                             }
-                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
                               subtask.status === "completed"
                                 ? "border-blue-600 bg-blue-600"
                                 : "border-slate-300"
@@ -383,7 +387,7 @@ export function TaskDetailPage() {
                             type="button"
                             aria-label={t("taskCard.deleteTask")}
                             onClick={() => deleteTask.mutate(subtask.id)}
-                            className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600"
+                            className="shrink-0 rounded-md p-2.5 text-slate-400 hover:bg-slate-100 hover:text-red-600"
                           >
                             <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                               <path d="M8 2a1 1 0 0 0-1 1v1H4a1 1 0 0 0 0 2h.35l.65 10.02A2 2 0 0 0 6.99 18h6.02a2 2 0 0 0 2-1.98L15.65 6H16a1 1 0 1 0 0-2h-3V3a1 1 0 0 0-1-1H8Zm1 2V3h2v1H9Zm-1.63 2h7.26l-.63 9.9a.5.5 0 0 1-.5.1H7.5a.5.5 0 0 1-.5-.1L6.37 6Z" />

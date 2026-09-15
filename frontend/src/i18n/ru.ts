@@ -57,9 +57,6 @@ export const ru: typeof en = {
   },
   tasks: {
     title: "Задачи",
-    filterAll: "Все",
-    filterPending: "Активные",
-    filterCompleted: "Выполненные",
     assigneeAll: "Общие",
     assigneeMine: "Мои",
     loading: "Загружаем задачи…",
@@ -72,6 +69,7 @@ export const ru: typeof en = {
       add: "Бюджет",
       amountPlaceholder: "Сумма",
       shared: "Общий",
+      owner: "Чей бюджет",
     },
     myTasks: "Мои задачи",
     addList: "Новая папка",

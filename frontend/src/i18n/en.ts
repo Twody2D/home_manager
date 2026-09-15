@@ -55,9 +55,6 @@ export const en = {
   },
   tasks: {
     title: "Tasks",
-    filterAll: "All",
-    filterPending: "Pending",
-    filterCompleted: "Completed",
     assigneeAll: "Everyone",
     assigneeMine: "Mine",
     loading: "Loading tasks…",
@@ -70,6 +67,7 @@ export const en = {
       add: "Budget",
       amountPlaceholder: "Amount",
       shared: "Shared",
+      owner: "Budget owner",
     },
     myTasks: "My Tasks",
     addList: "New list",
