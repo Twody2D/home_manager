@@ -138,9 +138,11 @@ class Task(Base):
         UUID(as_uuid=True), ForeignKey("task_lists.id", ondelete="SET NULL"), nullable=True
     )
     # Nesting is capped at four levels total (task/subtask/sub-subtask/
-    # sub-sub-subtask), enforced in service.py, not the DB.
+    # sub-sub-subtask), enforced in service.py, not the DB. CASCADE (not
+    # SET NULL) so deleting a task takes its whole subtree with it, rather
+    # than orphaning its subtasks as newly top-level tasks.
     parent_task_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True
     )
     # Manual sort position within a sibling group — same (tenant_id,
     # list_id, parent_task_id) — for drag-and-drop reordering. Not globally

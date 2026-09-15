@@ -266,6 +266,30 @@ async def test_delete_task(client: AsyncClient, register_household: RegisterHous
 
 
 @pytest.mark.asyncio
+async def test_deleting_a_task_cascades_to_its_whole_subtask_tree(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    parent = await client.post("/api/v1/tasks", json={"title": "Parent"}, headers=headers)
+    parent_id = parent.json()["id"]
+    child = await client.post(
+        "/api/v1/tasks", json={"title": "Child", "parent_task_id": parent_id}, headers=headers
+    )
+    child_id = child.json()["id"]
+    grandchild = await client.post(
+        "/api/v1/tasks", json={"title": "Grandchild", "parent_task_id": child_id}, headers=headers
+    )
+    grandchild_id = grandchild.json()["id"]
+
+    delete_response = await client.delete(f"/api/v1/tasks/{parent_id}", headers=headers)
+    assert delete_response.status_code == 204
+
+    assert (await client.get(f"/api/v1/tasks/{child_id}", headers=headers)).status_code == 404
+    assert (await client.get(f"/api/v1/tasks/{grandchild_id}", headers=headers)).status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_list_tasks_filters_by_status_and_paginates(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

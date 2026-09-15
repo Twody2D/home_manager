@@ -73,13 +73,14 @@ function setSubtasksCollapsedInStorage(taskId: string, collapsed: boolean) {
   }
 }
 
-// While dragging, once the dragged card's left edge has moved at least this
-// far past the hovered task's own left edge, it's sitting over that task's
-// name rather than lined up with its grip/checkbox column — dropping there
-// nests it as that task's new child instead of reordering. Comfortably past
-// incidental horizontal jitter during an otherwise-vertical reorder drag,
-// and roughly where the name starts (grip + checkbox + gaps).
-const NEST_ZONE_OFFSET = 56;
+// While dragging onto a sibling (same list/parent group — see
+// resolveNestTarget), once the dragged card's left edge has moved at least
+// this far past the hovered task's own left edge, it's sitting over that
+// task's content rather than lined up with its grip/checkbox column —
+// dropping there nests it instead of reordering. Kept small (just past the
+// grip button) since siblings are the common case and it should take only
+// a small deliberate nudge, not a precise "special position", to trigger.
+const NEST_ZONE_OFFSET = 24;
 
 interface TabSlotArgs {
   innerRef: (node: HTMLButtonElement | null) => void;
@@ -619,7 +620,13 @@ export function TasksPage() {
     overRect: { left: number },
   ): string | null {
     if (activeId === overId || !activeRect) return null;
-    if (activeRect.left - overRect.left < NEST_ZONE_OFFSET) return null;
+    // Siblings (same list/parent group) could mean either "reorder" or
+    // "nest", so nesting there needs the deliberate rightward hover.
+    // Dropped onto a task from a *different* group, there's no reorder
+    // interpretation at all — hovering over it at all means nest, no
+    // particular horizontal position required.
+    const sameGroup = idToGroupKey.get(activeId) === idToGroupKey.get(overId);
+    if (sameGroup && activeRect.left - overRect.left < NEST_ZONE_OFFSET) return null;
     // Guard against a cycle (dropping onto your own descendant) and against
     // exceeding the depth cap (also enforced backend-side, but checking
     // here avoids a pointless request — or a confusing preview highlight —

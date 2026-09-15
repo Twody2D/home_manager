@@ -102,6 +102,7 @@ export const ru: typeof en = {
       duplicate: "Дублировать",
       duplicating: "Дублируем…",
       duplicateSuffix: "(копия)",
+      duplicateFailed: "Не удалось дублировать задачу. Попробуйте ещё раз.",
       delete: "Удалить задачу",
       notFound: "Задача не найдена.",
       loading: "Загружаем задачу…",

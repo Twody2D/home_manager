@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -32,9 +32,9 @@ const MAX_TASK_DEPTH = 4;
 
 // See NEST_ZONE_OFFSET in TasksPage — once the dragged subtask's left edge
 // has moved this far past a sibling's own left edge, it's hovering over
-// that sibling's name (not lined up with its grip/checkbox column), which
-// nests it under that sibling instead of reordering.
-const NEST_ZONE_OFFSET = 56;
+// that sibling's content (not lined up with its grip/checkbox column),
+// which nests it under that sibling instead of reordering.
+const NEST_ZONE_OFFSET = 24;
 
 const PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
@@ -216,6 +216,12 @@ export function TaskDetailPage() {
   // nesting — see the same pattern in TasksPage.
   const [nestTargetId, setNestTargetId] = useState<string | null>(null);
   const [isDuplicating, setIsDuplicating] = useState(false);
+  // A ref (not just the isDuplicating state) because state updates are
+  // batched/async — a fast double-click could otherwise slip a second
+  // handleDuplicate() past the isDuplicating check before the first one's
+  // setIsDuplicating(true) has actually re-rendered, launching two
+  // duplicate operations (and two competing navigations) in parallel.
+  const isDuplicatingRef = useRef(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -278,7 +284,8 @@ export function TaskDetailPage() {
   }
 
   async function handleDuplicate() {
-    if (!task || isDuplicating) return;
+    if (!task || isDuplicatingRef.current) return;
+    isDuplicatingRef.current = true;
     setIsDuplicating(true);
     try {
       const duplicate = await duplicateSubtree(
@@ -286,7 +293,12 @@ export function TaskDetailPage() {
         task.parent_task_id,
       );
       navigate(`/tasks/${duplicate.id}`);
+    } catch {
+      // Surfaced rather than swallowed — an interrupted duplicate can
+      // otherwise leave a partial copy behind with no feedback at all.
+      window.alert(t("tasks.detail.duplicateFailed"));
     } finally {
+      isDuplicatingRef.current = false;
       setIsDuplicating(false);
     }
   }

@@ -100,6 +100,7 @@ export const en = {
       duplicate: "Duplicate",
       duplicating: "Duplicating…",
       duplicateSuffix: "(copy)",
+      duplicateFailed: "Couldn't duplicate the task. Please try again.",
       delete: "Delete task",
       notFound: "Task not found.",
       loading: "Loading task…",
