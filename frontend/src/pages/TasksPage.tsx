@@ -48,11 +48,13 @@ type ListScope = string | "all";
 // with MAX_TASK_DEPTH in the backend's tasks/service.py.
 const MAX_TASK_DEPTH = 4;
 
-// Dragging a task at least this far to the right while dropping it onto
-// another task nests it as that task's new child instead of reordering —
-// the familiar "drag right to indent" outliner gesture. Comfortably past
-// incidental horizontal jitter during an otherwise-vertical reorder drag.
-const NEST_DRAG_THRESHOLD = 40;
+// While dragging, once the dragged card's left edge has moved at least this
+// far past the hovered task's own left edge, it's sitting over that task's
+// name rather than lined up with its grip/checkbox column — dropping there
+// nests it as that task's new child instead of reordering. Comfortably past
+// incidental horizontal jitter during an otherwise-vertical reorder drag,
+// and roughly where the name starts (grip + checkbox + gaps).
+const NEST_ZONE_OFFSET = 56;
 
 interface TabSlotArgs {
   innerRef: (node: HTMLButtonElement | null) => void;
@@ -572,12 +574,19 @@ export function TasksPage() {
     return false;
   }
 
-  // Whether dragging activeId onto overId right now (given how far right
-  // it's been dragged) would nest it under overId — null if not. Shared by
-  // the live drag-move preview and the actual drop handler so they always
-  // agree on when nesting would apply.
-  function resolveNestTarget(activeId: string, overId: string, deltaX: number): string | null {
-    if (deltaX <= NEST_DRAG_THRESHOLD || activeId === overId) return null;
+  // Whether activeId, currently dragged to activeRect, is hovering over
+  // overId's name (rather than lined up with its grip/checkbox column) —
+  // null if not, or if nesting there wouldn't be valid. Shared by the live
+  // drag-move preview and the actual drop handler so they always agree on
+  // when nesting would apply.
+  function resolveNestTarget(
+    activeId: string,
+    overId: string,
+    activeRect: { left: number } | null,
+    overRect: { left: number },
+  ): string | null {
+    if (activeId === overId || !activeRect) return null;
+    if (activeRect.left - overRect.left < NEST_ZONE_OFFSET) return null;
     // Guard against a cycle (dropping onto your own descendant) and against
     // exceeding the depth cap (also enforced backend-side, but checking
     // here avoids a pointless request — or a confusing preview highlight —
@@ -589,8 +598,11 @@ export function TasksPage() {
   }
 
   function handleDragMove(event: DragMoveEvent) {
-    const { active, over, delta } = event;
-    setNestTargetId(over ? resolveNestTarget(String(active.id), String(over.id), delta.x) : null);
+    const { active, over } = event;
+    const target = over
+      ? resolveNestTarget(String(active.id), String(over.id), active.rect.current.translated, over.rect)
+      : null;
+    setNestTargetId((prev) => (prev === target ? prev : target));
   }
 
   function handleDragCancel() {
@@ -598,7 +610,7 @@ export function TasksPage() {
   }
 
   function handleDragEnd(event: DragEndEvent) {
-    const { active, over, delta } = event;
+    const { active, over } = event;
     setNestTargetId(null);
     if (!over || active.id === over.id) return;
     const activeId = String(active.id);
@@ -607,11 +619,16 @@ export function TasksPage() {
     const overKey = idToGroupKey.get(overId);
     if (!activeKey || !overKey) return;
 
-    const nestTarget = resolveNestTarget(activeId, overId, delta.x);
+    const nestTarget = resolveNestTarget(
+      activeId,
+      overId,
+      active.rect.current.translated,
+      over.rect,
+    );
     if (nestTarget) {
-      // Dragged noticeably to the right while dropping onto another task —
-      // nest the dragged task as that task's new child instead of
-      // reordering, regardless of whether the two started out as siblings.
+      // Hovering over the target's name rather than reordering — nest the
+      // dragged task as that task's new child instead, regardless of
+      // whether the two started out as siblings.
       updateTask.mutate({ id: activeId, input: { parent_task_id: nestTarget } });
       return;
     }

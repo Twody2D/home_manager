@@ -121,7 +121,7 @@ export function TaskCard({
         </button>
       )}
 
-      <Link to={`/tasks/${task.id}`} className="min-w-0 flex-1 py-0.5">
+      <Link to={`/tasks/${task.id}`} className="min-w-0 flex-1 py-0.5" draggable={false}>
         <p
           className={`truncate text-sm font-medium ${
             isCompleted ? "text-slate-400 line-through" : "text-slate-900"

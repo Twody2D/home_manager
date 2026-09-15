@@ -30,10 +30,11 @@ import type { Task, TaskPriority, TaskUpdateInput } from "../api/types";
 // with MAX_TASK_DEPTH in the backend's tasks/service.py.
 const MAX_TASK_DEPTH = 4;
 
-// Dragging a subtask at least this far to the right while dropping it onto
-// a sibling nests it under that sibling instead of reordering — see the
-// same gesture (and NEST_DRAG_THRESHOLD) in TasksPage.
-const NEST_DRAG_THRESHOLD = 40;
+// See NEST_ZONE_OFFSET in TasksPage — once the dragged subtask's left edge
+// has moved this far past a sibling's own left edge, it's hovering over
+// that sibling's name (not lined up with its grip/checkbox column), which
+// nests it under that sibling instead of reordering.
+const NEST_ZONE_OFFSET = 56;
 
 const PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
@@ -85,6 +86,7 @@ function SubSubtaskRow({
           className={`flex-1 truncate text-sm ${
             isCompleted ? "text-slate-400 line-through" : "text-slate-700"
           }`}
+          draggable={false}
         >
           {task.title}
         </Link>
@@ -181,11 +183,18 @@ export function TaskDetailPage() {
     return false;
   }
 
-  // Whether dragging activeId onto overId right now (given how far right
-  // it's been dragged) would nest it under overId — null if not. Shared by
-  // the live drag-move preview and the actual drop handler.
-  function resolveNestTarget(activeId: string, overId: string, deltaX: number): string | null {
-    if (deltaX <= NEST_DRAG_THRESHOLD || activeId === overId) return null;
+  // Whether activeId, currently dragged to activeRect, is hovering over
+  // overId's name (rather than lined up with its grip/checkbox column) —
+  // null if not, or if nesting there wouldn't be valid. Shared by the live
+  // drag-move preview and the actual drop handler.
+  function resolveNestTarget(
+    activeId: string,
+    overId: string,
+    activeRect: { left: number } | null,
+    overRect: { left: number },
+  ): string | null {
+    if (activeId === overId || !activeRect) return null;
+    if (activeRect.left - overRect.left < NEST_ZONE_OFFSET) return null;
     if (isDescendantOf(activeId, overId)) return null;
     const newDepth = taskDepth(overId) + 1;
     if (newDepth + subtreeHeight(activeId) > MAX_TASK_DEPTH - 1) return null;
@@ -206,6 +215,7 @@ export function TaskDetailPage() {
   // The subtask currently highlighted as the pending drop target for
   // nesting — see the same pattern in TasksPage.
   const [nestTargetId, setNestTargetId] = useState<string | null>(null);
+  const [isDuplicating, setIsDuplicating] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -241,6 +251,46 @@ export function TaskDetailPage() {
     setIsAddingSubtask(false);
   }
 
+  // Copies source and, recursively, every one of its descendants (so
+  // duplicating a task with a subtask structure — e.g. a release checklist
+  // — reproduces the whole tree, not just the top task) under parentId.
+  async function duplicateSubtree(source: Task, parentId: string | null): Promise<Task> {
+    const created = await createTask.mutateAsync({
+      title: source.title,
+      description: source.description,
+      assigned_to: source.assigned_to,
+      priority: source.priority,
+      duration_minutes: source.duration_minutes,
+      due_at: source.due_at,
+      preferred_start: source.preferred_start,
+      preferred_end: source.preferred_end,
+      location: source.location,
+      recurrence: source.recurrence,
+      budget_amount: source.budget_amount,
+      budget_owner_user_id: source.budget_owner_user_id,
+      list_id: source.list_id,
+      parent_task_id: parentId,
+    });
+    for (const child of grandchildrenByParent.get(source.id) ?? []) {
+      await duplicateSubtree(child, created.id);
+    }
+    return created;
+  }
+
+  async function handleDuplicate() {
+    if (!task || isDuplicating) return;
+    setIsDuplicating(true);
+    try {
+      const duplicate = await duplicateSubtree(
+        { ...task, title: `${task.title} ${t("tasks.detail.duplicateSuffix")}` },
+        task.parent_task_id,
+      );
+      navigate(`/tasks/${duplicate.id}`);
+    } finally {
+      setIsDuplicating(false);
+    }
+  }
+
   const orderedSubtasks = (() => {
     if (!subtaskOrder) return subtasks;
     const byId = new Map(subtasks.map((s) => [s.id, s]));
@@ -251,8 +301,11 @@ export function TaskDetailPage() {
   })();
 
   function handleSubtaskDragMove(event: DragMoveEvent) {
-    const { active, over, delta } = event;
-    setNestTargetId(over ? resolveNestTarget(String(active.id), String(over.id), delta.x) : null);
+    const { active, over } = event;
+    const target = over
+      ? resolveNestTarget(String(active.id), String(over.id), active.rect.current.translated, over.rect)
+      : null;
+    setNestTargetId((prev) => (prev === target ? prev : target));
   }
 
   function handleSubtaskDragCancel() {
@@ -260,14 +313,19 @@ export function TaskDetailPage() {
   }
 
   function handleSubtaskDragEnd(event: DragEndEvent) {
-    const { active, over, delta } = event;
+    const { active, over } = event;
     setNestTargetId(null);
     if (!task || !over || active.id === over.id) return;
 
-    const nestTarget = resolveNestTarget(String(active.id), String(over.id), delta.x);
+    const nestTarget = resolveNestTarget(
+      String(active.id),
+      String(over.id),
+      active.rect.current.translated,
+      over.rect,
+    );
     if (nestTarget) {
-      // Dragged noticeably to the right while dropping onto a sibling
-      // subtask — nest it under that sibling instead of reordering.
+      // Hovering over the sibling's name rather than reordering — nest the
+      // dragged subtask under that sibling instead.
       updateTask.mutate({ id: String(active.id), input: { parent_task_id: nestTarget } });
       return;
     }
@@ -541,6 +599,7 @@ export function TaskDetailPage() {
                                     ? "text-slate-400 line-through"
                                     : "text-slate-900"
                                 }`}
+                                draggable={false}
                               >
                                 {subtask.title}
                               </Link>
@@ -635,6 +694,14 @@ export function TaskDetailPage() {
           className="flex-1 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           {isCompleted ? t("tasks.detail.markIncomplete") : t("tasks.detail.markComplete")}
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleDuplicate()}
+          disabled={isDuplicating}
+          className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+        >
+          {isDuplicating ? t("tasks.detail.duplicating") : t("tasks.detail.duplicate")}
         </button>
         <button
           type="button"
