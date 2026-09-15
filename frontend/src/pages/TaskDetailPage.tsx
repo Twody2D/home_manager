@@ -54,11 +54,11 @@ function SubSubtaskRow({
   task: { id: string; title: string; status: string };
   onToggleComplete: () => void;
   onDelete: () => void;
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const isCompleted = task.status === "completed";
   return (
-    <li className="flex items-center gap-2 rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5">
+    <li className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5">
       <button
         type="button"
         onClick={onToggleComplete}
@@ -77,7 +77,9 @@ function SubSubtaskRow({
       <button
         type="button"
         aria-label={t("taskCard.deleteTask")}
-        onClick={onDelete}
+        onClick={() => {
+          if (window.confirm(t("tasks.confirmDelete", { title: task.title }))) onDelete();
+        }}
         className="shrink-0 rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-red-600"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
@@ -194,6 +196,7 @@ export function TaskDetailPage() {
 
   async function handleDelete() {
     if (!task) return;
+    if (!window.confirm(t("tasks.confirmDelete", { title: task.title }))) return;
     await deleteTask.mutateAsync(task.id);
     navigate("/tasks");
   }
@@ -446,7 +449,10 @@ export function TaskDetailPage() {
                               <button
                                 type="button"
                                 aria-label={t("taskCard.deleteTask")}
-                                onClick={() => deleteTask.mutate(subtask.id)}
+                                onClick={() => {
+                                  if (window.confirm(t("tasks.confirmDelete", { title: subtask.title })))
+                                    deleteTask.mutate(subtask.id);
+                                }}
                                 className="shrink-0 rounded-md p-2.5 text-slate-400 hover:bg-slate-100 hover:text-red-600"
                               >
                                 <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">

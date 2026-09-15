@@ -342,10 +342,11 @@ function TaskGroup({
   onDelete: (task: Task) => void;
   nested?: boolean;
 }) {
-  const [showCompleted, setShowCompleted] = useState(false);
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
+  // Subtasks are never split off into a separate completed section like
+  // root tasks are — toggling one complete should just strike it through
+  // in place, not make it jump out of the list.
   const subtasks = subtasksByParent.get(task.id) ?? [];
-  const { active: activeSubtasks, completed: completedSubtasks } = splitByStatus(subtasks);
   const hasSubtasks = subtasks.length > 0;
 
   return (
@@ -376,8 +377,8 @@ function TaskGroup({
 
       {hasSubtasks && !subtasksCollapsed && (
         <ul className="ml-6 space-y-1.5 border-l border-slate-200 pl-3">
-          <SortableContext items={activeSubtasks.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-            {activeSubtasks.map((subtask) => (
+          <SortableContext items={subtasks.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+            {subtasks.map((subtask) => (
               <TaskGroup
                 key={subtask.id}
                 task={subtask}
@@ -390,23 +391,6 @@ function TaskGroup({
               />
             ))}
           </SortableContext>
-          <CompletedToggle
-            count={completedSubtasks.length}
-            open={showCompleted}
-            onToggle={() => setShowCompleted((o) => !o)}
-          />
-          {showCompleted &&
-            completedSubtasks.map((subtask) => (
-              <TaskCard
-                key={subtask.id}
-                task={subtask}
-                assignee={subtask.assigned_to ? membersById.get(subtask.assigned_to) : undefined}
-                isUpdating={isUpdating}
-                onToggleComplete={onToggleComplete}
-                onDelete={onDelete}
-                nested
-              />
-            ))}
         </ul>
       )}
     </li>

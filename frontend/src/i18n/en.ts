@@ -81,6 +81,7 @@ export const en = {
     listMenu: "List menu",
     completedCount: "Completed ({{count}})",
     subtaskOf: "Subtask of: {{title}}",
+    confirmDelete: 'Delete "{{title}}"?',
     detail: {
       back: "Back",
       titlePlaceholder: "Task title",

@@ -83,6 +83,7 @@ export const ru: typeof en = {
     listMenu: "Меню папки",
     completedCount: "Выполнено ({{count}})",
     subtaskOf: "Подзадача: {{title}}",
+    confirmDelete: "Удалить «{{title}}»?",
     detail: {
       back: "Назад",
       titlePlaceholder: "Название задачи",
