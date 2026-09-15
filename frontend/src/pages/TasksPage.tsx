@@ -48,6 +48,31 @@ type ListScope = string | "all";
 // with MAX_TASK_DEPTH in the backend's tasks/service.py.
 const MAX_TASK_DEPTH = 4;
 
+// Which tasks have their subtasks collapsed, persisted per-browser so a
+// page refresh doesn't silently re-expand everything the user tucked away.
+const COLLAPSED_SUBTASKS_STORAGE_KEY = "home-manager:collapsed-subtasks";
+
+function readCollapsedSubtaskIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_SUBTASKS_STORAGE_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function setSubtasksCollapsedInStorage(taskId: string, collapsed: boolean) {
+  try {
+    const ids = readCollapsedSubtaskIds();
+    if (collapsed) ids.add(taskId);
+    else ids.delete(taskId);
+    localStorage.setItem(COLLAPSED_SUBTASKS_STORAGE_KEY, JSON.stringify([...ids]));
+  } catch {
+    // Private browsing, storage quota, etc. — the toggle still works for
+    // the current session, it just won't survive a reload.
+  }
+}
+
 // While dragging, once the dragged card's left edge has moved at least this
 // far past the hovered task's own left edge, it's sitting over that task's
 // name rather than lined up with its grip/checkbox column — dropping there
@@ -356,7 +381,7 @@ function TaskGroup({
   nestTargetId: string | null;
   nested?: boolean;
 }) {
-  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readCollapsedSubtaskIds().has(task.id));
   // Subtasks are never split off into a separate completed section like
   // root tasks are — toggling one complete should just strike it through
   // in place, not make it jump out of the list.
@@ -376,7 +401,15 @@ function TaskGroup({
               }
               subtaskToggle={
                 hasSubtasks
-                  ? { expanded: !subtasksCollapsed, onToggle: () => setSubtasksCollapsed((c) => !c) }
+                  ? {
+                      expanded: !subtasksCollapsed,
+                      onToggle: () =>
+                        setSubtasksCollapsed((c) => {
+                          const next = !c;
+                          setSubtasksCollapsedInStorage(task.id, next);
+                          return next;
+                        }),
+                    }
                   : undefined
               }
               isUpdating={isUpdating}
