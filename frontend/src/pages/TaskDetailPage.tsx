@@ -129,7 +129,11 @@ export function TaskDetailPage() {
   const parentQuery = useTask(task?.parent_task_id ?? undefined);
   const membersQuery = useMembers();
   const taskListsQuery = useTaskLists();
-  const allTasksQuery = useTasks({ limit: 100 });
+  // Must cover the whole household task set — see the matching comment in
+  // TasksPage, same reasoning (this builds grandchildrenByParent for the
+  // subtask tree and for duplicateSubtree's descendant lookup, both of
+  // which need every task, not just the first page).
+  const allTasksQuery = useTasks({ limit: 1000 });
 
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();

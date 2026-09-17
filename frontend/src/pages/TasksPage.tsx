@@ -487,7 +487,12 @@ export function TasksPage() {
     assigneeFilter === "mine" ? user?.id : assigneeFilter === "partner" ? partner?.id : undefined;
   const tasksQuery = useTasks({
     ...(assignedTo ? { assigned_to: assignedTo } : {}),
-    limit: 100,
+    // Must cover the whole household task set — this page groups everything
+    // into lists/subtask trees client-side, so a limit lower than the real
+    // count silently truncates the globally order_index-sorted response and
+    // can drop root-level tasks that still show up everywhere else (see the
+    // matching comment on the backend's /tasks limit cap).
+    limit: 1000,
   });
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();

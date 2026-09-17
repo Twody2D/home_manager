@@ -57,7 +57,16 @@ async def list_tasks(
     session: DbSession,
     status_filter: Annotated[TaskStatus | None, Query(alias="status")] = None,
     assigned_to: uuid.UUID | None = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    # Callers (TasksPage, TaskDetailPage) fetch the household's whole task
+    # set in one page and build lists/subtask trees client-side — see
+    # list_tasks below — so the cap here needs enough headroom that a task
+    # count of a hundred-plus (a handful of trees a few levels deep) doesn't
+    # silently truncate the response. 100 was too low: it clipped the tail
+    # of the globally order_index-sorted result before some root-level
+    # tasks in a household with many subtask trees, effectively hiding them
+    # from the "Задачи" list while they still showed up everywhere that
+    # doesn't paginate (the daily plan, subtask counts, etc).
+    limit: Annotated[int, Query(ge=1, le=1000)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> TaskPageResponse:
     items, total = await service.list_tasks(

@@ -56,7 +56,10 @@ function partitionByDueDate(tasks: Task[]) {
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
-  const tasksQuery = useTasks({ status: "pending", limit: 100 });
+  // See the matching comment in TasksPage — must cover every pending task,
+  // not just the first page, or overdue/unscheduled ones past the cutoff
+  // silently vanish from this list while still showing up in the plan.
+  const tasksQuery = useTasks({ status: "pending", limit: 1000 });
   const membersQuery = useMembers();
   const planQuery = useDailyPlan();
   const updateTask = useUpdateTask();
