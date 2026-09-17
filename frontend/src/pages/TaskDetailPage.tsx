@@ -225,6 +225,20 @@ export function TaskDetailPage() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
+  // Belt-and-braces reset: react-router keeps this same component instance
+  // mounted across /tasks/:taskId -> /tasks/:otherId navigations (only the
+  // param changes), so isDuplicating is otherwise scoped to the page, not
+  // the specific task. If a duplicate's promise chain is ever interrupted
+  // in a way that skips handleDuplicate's own finally (a stale in-flight
+  // request racing a fast subsequent navigation, browser back/forward,
+  // etc.), the button could stay stuck disabled on every task viewed
+  // afterwards. Tying the reset to taskId guarantees every task page starts
+  // with a clean, clickable button regardless of what happened before.
+  useEffect(() => {
+    isDuplicatingRef.current = false;
+    setIsDuplicating(false);
+  }, [taskId]);
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") navigate(-1);
