@@ -100,6 +100,43 @@ export interface TaskListCreateInput {
 
 export type TaskListUpdateInput = Partial<TaskListCreateInput>;
 
+export interface TaskTemplateItem {
+  title: string;
+  priority: TaskPriority;
+  duration_minutes: number | null;
+  children: TaskTemplateItem[];
+}
+
+export interface TaskTemplate {
+  id: string;
+  tenant_id: string;
+  created_by: string | null;
+  list_id: string | null;
+  name: string;
+  priority: TaskPriority;
+  duration_minutes: number | null;
+  items: TaskTemplateItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskTemplatesResponse {
+  items: TaskTemplate[];
+}
+
+export interface TaskTemplateInput {
+  name: string;
+  list_id: string | null;
+  priority: TaskPriority;
+  duration_minutes: number | null;
+  items: TaskTemplateItem[];
+}
+
+export interface TaskTemplateApplyInput {
+  title: string;
+  due_at?: string | null;
+}
+
 export type TaskUpdateInput = Partial<TaskCreateInput> & { status?: TaskStatus };
 
 export interface ApiErrorBody {

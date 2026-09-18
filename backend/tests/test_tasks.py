@@ -978,3 +978,189 @@ async def test_reorder_scoped_to_correct_list(
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "INVALID_REORDER"
+
+
+TRACK_TEMPLATE_ITEMS = [
+    {"title": "Видео сторис", "duration_minutes": 60},
+    {
+        "title": "Дистрибьюция",
+        "children": [
+            {"title": "Форма дистрибьюции"},
+            {"title": "Текст"},
+            {"title": "Обложка"},
+        ],
+    },
+    {
+        "title": "Питчинг",
+        "priority": "high",
+        "children": [
+            {"title": "Форма промо"},
+            {
+                "title": "Площадки",
+                "children": [
+                    {"title": "Яндекс музыка (band.link)"},
+                    {"title": "VK музыка"},
+                ],
+            },
+        ],
+    },
+]
+
+
+@pytest.mark.asyncio
+async def test_create_and_apply_task_template(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    owner_id = owner["user"]["id"]
+    task_list = await client.post("/api/v1/task-lists", json={"name": "Треки"}, headers=headers)
+    list_id = task_list.json()["id"]
+
+    created = await client.post(
+        "/api/v1/task-templates",
+        json={
+            "name": "Новый трек",
+            "list_id": list_id,
+            "duration_minutes": 30,
+            "items": TRACK_TEMPLATE_ITEMS,
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    template_id = created.json()["id"]
+    assert created.json()["items"][2]["children"][1]["children"][0]["title"] == (
+        "Яндекс музыка (band.link)"
+    )
+
+    applied = await client.post(
+        f"/api/v1/task-templates/{template_id}/apply",
+        json={"title": "Brazil"},
+        headers=headers,
+    )
+    assert applied.status_code == 201, applied.text
+    root = applied.json()
+    assert root["title"] == "Brazil"
+    assert root["list_id"] == list_id
+    assert root["duration_minutes"] == 30
+    # Whoever applies the template owns the tasks it produces.
+    assert root["assigned_to"] == owner_id
+
+    tasks = (await client.get("/api/v1/tasks?limit=1000", headers=headers)).json()["items"]
+    by_title = {task["title"]: task for task in tasks}
+    # 1 root + 3 top-level items + 3 + 2 + 2 nested = 11 tasks.
+    assert len(tasks) == 11
+    assert by_title["Дистрибьюция"]["parent_task_id"] == root["id"]
+    assert by_title["Текст"]["parent_task_id"] == by_title["Дистрибьюция"]["id"]
+    assert by_title["Площадки"]["parent_task_id"] == by_title["Питчинг"]["id"]
+    assert by_title["VK музыка"]["parent_task_id"] == by_title["Площадки"]["id"]
+    assert by_title["Питчинг"]["priority"] == "high"
+    assert by_title["Видео сторис"]["duration_minutes"] == 60
+    # Every task lands in the template's folder, including the deep ones.
+    assert all(task["list_id"] == list_id for task in tasks)
+    assert all(task["assigned_to"] == owner_id for task in tasks)
+
+
+@pytest.mark.asyncio
+async def test_task_templates_are_scoped_to_folder_and_tenant(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner_a = await register_household(client, email="owner-a@example.com")
+    owner_b = await register_household(client, email="owner-b@example.com")
+    headers_a = _auth_headers(owner_a)
+
+    tracks = await client.post("/api/v1/task-lists", json={"name": "Треки"}, headers=headers_a)
+    list_id = tracks.json()["id"]
+    await client.post(
+        "/api/v1/task-templates", json={"name": "Трек", "list_id": list_id}, headers=headers_a
+    )
+    await client.post("/api/v1/task-templates", json={"name": "Без папки"}, headers=headers_a)
+
+    all_templates = await client.get("/api/v1/task-templates", headers=headers_a)
+    assert [item["name"] for item in all_templates.json()["items"]] == ["Трек", "Без папки"]
+
+    folder_only = await client.get(
+        f"/api/v1/task-templates?only_list=true&list_id={list_id}", headers=headers_a
+    )
+    assert [item["name"] for item in folder_only.json()["items"]] == ["Трек"]
+
+    default_bucket = await client.get("/api/v1/task-templates?only_list=true", headers=headers_a)
+    assert [item["name"] for item in default_bucket.json()["items"]] == ["Без папки"]
+
+    other_tenant = await client.get("/api/v1/task-templates", headers=_auth_headers(owner_b))
+    assert other_tenant.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_update_and_delete_task_template(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    created = await client.post(
+        "/api/v1/task-templates",
+        json={"name": "Трек", "items": [{"title": "Питчинг"}]},
+        headers=headers,
+    )
+    template_id = created.json()["id"]
+
+    updated = await client.patch(
+        f"/api/v1/task-templates/{template_id}",
+        json={
+            "name": "Релиз",
+            "priority": "urgent",
+            "items": [{"title": "Питчинг", "children": [{"title": "Текст"}]}],
+        },
+        headers=headers,
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["name"] == "Релиз"
+    assert updated.json()["priority"] == "urgent"
+    assert updated.json()["items"][0]["children"][0]["title"] == "Текст"
+
+    assert (
+        await client.delete(f"/api/v1/task-templates/{template_id}", headers=headers)
+    ).status_code == 204
+    assert (await client.get("/api/v1/task-templates", headers=headers)).json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_task_template_rejects_nesting_past_the_task_depth_cap(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+
+    response = await client.post(
+        "/api/v1/task-templates",
+        json={
+            "name": "Слишком глубокий",
+            "items": [
+                {
+                    "title": "1",
+                    "children": [
+                        {"title": "2", "children": [{"title": "3", "children": [{"title": "4"}]}]}
+                    ],
+                }
+            ],
+        },
+        headers=_auth_headers(owner),
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_folder_takes_its_templates(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    tracks = await client.post("/api/v1/task-lists", json={"name": "Треки"}, headers=headers)
+    list_id = tracks.json()["id"]
+    await client.post(
+        "/api/v1/task-templates", json={"name": "Трек", "list_id": list_id}, headers=headers
+    )
+
+    await client.delete(f"/api/v1/task-lists/{list_id}", headers=headers)
+
+    assert (await client.get("/api/v1/task-templates", headers=headers)).json()["items"] == []

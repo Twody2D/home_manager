@@ -125,6 +125,82 @@ class TaskListsResponse(BaseModel):
     items: list[TaskListResponse]
 
 
+class TaskTemplateItem(BaseModel):
+    """One node of a template's task tree. `children` nests the same shape,
+    which is what gives the template its subtask structure."""
+
+    title: str = Field(min_length=1, max_length=200)
+    priority: TaskPriority = TaskPriority.MEDIUM
+    duration_minutes: int | None = Field(default=None, gt=0)
+    children: list["TaskTemplateItem"] = Field(default_factory=list)
+
+
+# Same cap as the tasks themselves (see MAX_TASK_DEPTH in service.py): a
+# template that nested deeper could never be applied.
+MAX_TEMPLATE_DEPTH = 4
+MAX_TEMPLATE_ITEMS = 200
+
+
+def _validate_tree(items: list[TaskTemplateItem], depth: int = 1) -> int:
+    if items and depth >= MAX_TEMPLATE_DEPTH:
+        raise ValueError(f"template nesting must not exceed {MAX_TEMPLATE_DEPTH} levels")
+    count = 0
+    for item in items:
+        count += 1 + _validate_tree(item.children, depth + 1)
+    return count
+
+
+class TaskTemplateBase(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    list_id: uuid.UUID | None = None
+    priority: TaskPriority = TaskPriority.MEDIUM
+    duration_minutes: int | None = Field(default=None, gt=0)
+    items: list[TaskTemplateItem] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_items(self) -> Self:
+        if _validate_tree(self.items) > MAX_TEMPLATE_ITEMS:
+            raise ValueError(f"a template must not hold more than {MAX_TEMPLATE_ITEMS} items")
+        return self
+
+
+class TaskTemplateCreate(TaskTemplateBase):
+    pass
+
+
+class TaskTemplateUpdate(TaskTemplateBase):
+    """Saved whole, same as it's edited — the form always submits the full
+    tree, so a partial update would only add ways for it to disagree with
+    what's on screen."""
+
+
+class TaskTemplateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    created_by: uuid.UUID | None
+    list_id: uuid.UUID | None
+    name: str
+    priority: TaskPriority
+    duration_minutes: int | None
+    items: list[TaskTemplateItem]
+    created_at: datetime
+    updated_at: datetime
+
+
+class TaskTemplatesResponse(BaseModel):
+    items: list[TaskTemplateResponse]
+
+
+class TaskTemplateApplyRequest(BaseModel):
+    """The one thing that differs per use — what this particular instance of
+    the template is called (a track name, say)."""
+
+    title: str = Field(min_length=1, max_length=200)
+    due_at: datetime | None = None
+
+
 class TaskReorderRequest(BaseModel):
     """Reorders one sibling group at once — every task sharing the same
     (list_id, parent_task_id) — rather than moving a single task to an

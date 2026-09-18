@@ -4,11 +4,14 @@ import type {
   TaskCreateInput,
   TaskListCreateInput,
   TaskListUpdateInput,
+  TaskTemplateApplyInput,
+  TaskTemplateInput,
   TaskUpdateInput,
 } from "../api/types";
 
 const TASKS_KEY = ["tasks"] as const;
 const TASK_LISTS_KEY = ["task-lists"] as const;
+const TASK_TEMPLATES_KEY = ["task-templates"] as const;
 
 export function useTasks(params: tasksApi.ListTasksParams = {}) {
   return useQuery({
@@ -106,5 +109,48 @@ export function useReorderTaskLists() {
   return useMutation({
     mutationFn: (orderedIds: string[]) => tasksApi.reorderTaskLists(orderedIds),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY }),
+  });
+}
+
+export function useTaskTemplates(listId?: string | null) {
+  return useQuery({
+    queryKey: [...TASK_TEMPLATES_KEY, listId ?? null],
+    queryFn: () => tasksApi.listTaskTemplates(listId),
+  });
+}
+
+export function useCreateTaskTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TaskTemplateInput) => tasksApi.createTaskTemplate(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASK_TEMPLATES_KEY }),
+  });
+}
+
+export function useUpdateTaskTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: TaskTemplateInput }) =>
+      tasksApi.updateTaskTemplate(id, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASK_TEMPLATES_KEY }),
+  });
+}
+
+export function useDeleteTaskTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => tasksApi.deleteTaskTemplate(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASK_TEMPLATES_KEY }),
+  });
+}
+
+export function useApplyTaskTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: TaskTemplateApplyInput }) =>
+      tasksApi.applyTaskTemplate(id, input),
+    // The whole tree lands server-side in one go, so a single refetch shows
+    // all of it at once.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASKS_KEY }),
   });
 }

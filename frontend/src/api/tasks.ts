@@ -8,6 +8,10 @@ import type {
   TaskListUpdateInput,
   TaskPageResponse,
   TaskStatus,
+  TaskTemplate,
+  TaskTemplateApplyInput,
+  TaskTemplateInput,
+  TaskTemplatesResponse,
   TaskUpdateInput,
 } from "./types";
 
@@ -72,4 +76,32 @@ export function deleteTaskList(id: string): Promise<void> {
 
 export function reorderTaskLists(orderedIds: string[]): Promise<TaskList[]> {
   return apiFetch("/task-lists/reorder", { method: "PATCH", body: { ordered_ids: orderedIds } });
+}
+
+export function listTaskTemplates(listId?: string | null): Promise<TaskTemplatesResponse> {
+  // only_list tells the backend to filter by folder at all, so that the
+  // default bucket (list_id=null) is distinguishable from "no filter".
+  const search = new URLSearchParams();
+  if (listId !== undefined) {
+    search.set("only_list", "true");
+    if (listId !== null) search.set("list_id", listId);
+  }
+  const query = search.toString();
+  return apiFetch(`/task-templates${query ? `?${query}` : ""}`);
+}
+
+export function createTaskTemplate(input: TaskTemplateInput): Promise<TaskTemplate> {
+  return apiFetch("/task-templates", { method: "POST", body: input });
+}
+
+export function updateTaskTemplate(id: string, input: TaskTemplateInput): Promise<TaskTemplate> {
+  return apiFetch(`/task-templates/${id}`, { method: "PATCH", body: input });
+}
+
+export function deleteTaskTemplate(id: string): Promise<void> {
+  return apiFetch(`/task-templates/${id}`, { method: "DELETE" });
+}
+
+export function applyTaskTemplate(id: string, input: TaskTemplateApplyInput): Promise<Task> {
+  return apiFetch(`/task-templates/${id}/apply`, { method: "POST", body: input });
 }

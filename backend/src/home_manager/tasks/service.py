@@ -8,13 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from home_manager.auth.models import User
 from home_manager.core.errors import AppError
-from home_manager.tasks.models import Task, TaskList, TaskStatus
+from home_manager.tasks.models import Task, TaskList, TaskPriority, TaskStatus, TaskTemplate
 from home_manager.tasks.schemas import (
     TaskCreate,
     TaskListCreate,
     TaskListReorderRequest,
     TaskListUpdate,
     TaskReorderRequest,
+    TaskTemplateApplyRequest,
+    TaskTemplateCreate,
+    TaskTemplateUpdate,
     TaskUpdate,
 )
 
@@ -47,6 +50,12 @@ class TaskListNotFoundError(AppError):
     code = "TASK_LIST_NOT_FOUND"
     status_code = status.HTTP_404_NOT_FOUND
     message = "Task list not found"
+
+
+class TaskTemplateNotFoundError(AppError):
+    code = "TASK_TEMPLATE_NOT_FOUND"
+    status_code = status.HTTP_404_NOT_FOUND
+    message = "Task template not found"
 
 
 class InvalidTaskListOwnerError(AppError):
@@ -468,6 +477,136 @@ async def delete_task_list(
     # moves them back to the default "My Tasks" bucket.
     await session.delete(task_list)
     await session.flush()
+
+
+async def create_task_template(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    created_by: uuid.UUID,
+    payload: TaskTemplateCreate,
+) -> TaskTemplate:
+    await _ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=payload.list_id)
+    template = TaskTemplate(
+        tenant_id=tenant_id,
+        created_by=created_by,
+        list_id=payload.list_id,
+        name=payload.name,
+        priority=payload.priority,
+        duration_minutes=payload.duration_minutes,
+        items=[item.model_dump(mode="json") for item in payload.items],
+    )
+    session.add(template)
+    await session.flush()
+    return template
+
+
+async def list_task_templates(
+    session: AsyncSession, *, tenant_id: uuid.UUID, list_id: uuid.UUID | None, list_id_set: bool
+) -> list[TaskTemplate]:
+    query = select(TaskTemplate).where(TaskTemplate.tenant_id == tenant_id)
+    if list_id_set:
+        query = query.where(
+            TaskTemplate.list_id == list_id
+            if list_id is not None
+            else TaskTemplate.list_id.is_(None)
+        )
+    return list((await session.scalars(query.order_by(TaskTemplate.created_at.asc()))).all())
+
+
+async def get_task_template(
+    session: AsyncSession, *, tenant_id: uuid.UUID, template_id: uuid.UUID
+) -> TaskTemplate:
+    template = await session.get(TaskTemplate, template_id)
+    if template is None or template.tenant_id != tenant_id:
+        raise TaskTemplateNotFoundError()
+    return template
+
+
+async def update_task_template(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    template_id: uuid.UUID,
+    payload: TaskTemplateUpdate,
+) -> TaskTemplate:
+    template = await get_task_template(session, tenant_id=tenant_id, template_id=template_id)
+    await _ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=payload.list_id)
+    template.name = payload.name
+    template.list_id = payload.list_id
+    template.priority = payload.priority
+    template.duration_minutes = payload.duration_minutes
+    template.items = [item.model_dump(mode="json") for item in payload.items]
+    await session.flush()
+    return template
+
+
+async def delete_task_template(
+    session: AsyncSession, *, tenant_id: uuid.UUID, template_id: uuid.UUID
+) -> None:
+    template = await get_task_template(session, tenant_id=tenant_id, template_id=template_id)
+    await session.delete(template)
+    await session.flush()
+
+
+async def apply_task_template(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    created_by: uuid.UUID,
+    template_id: uuid.UUID,
+    payload: TaskTemplateApplyRequest,
+) -> Task:
+    """Creates the template's whole tree in one go and returns its root task.
+
+    Building the tree server-side (rather than one request per node from the
+    browser) keeps a 20-node template a single atomic operation: it either
+    all lands or none of it does.
+    """
+    template = await get_task_template(session, tenant_id=tenant_id, template_id=template_id)
+    order_index = await _next_order_index(
+        session, tenant_id=tenant_id, list_id=template.list_id, parent_task_id=None
+    )
+    root = Task(
+        tenant_id=tenant_id,
+        created_by=created_by,
+        # Whoever applies the template owns what comes out of it, same
+        # default as adding a task by hand.
+        assigned_to=created_by,
+        budget_owner_user_id=created_by,
+        title=payload.title,
+        status=TaskStatus.PENDING,
+        priority=template.priority,
+        duration_minutes=template.duration_minutes,
+        due_at=payload.due_at,
+        list_id=template.list_id,
+        parent_task_id=None,
+        order_index=order_index,
+    )
+    session.add(root)
+    await session.flush()
+
+    async def add_children(items: list[dict[str, Any]], parent: Task) -> None:
+        for index, item in enumerate(items):
+            child = Task(
+                tenant_id=tenant_id,
+                created_by=created_by,
+                assigned_to=created_by,
+                budget_owner_user_id=created_by,
+                title=item["title"],
+                status=TaskStatus.PENDING,
+                priority=item.get("priority", TaskPriority.MEDIUM),
+                duration_minutes=item.get("duration_minutes"),
+                list_id=template.list_id,
+                parent_task_id=parent.id,
+                order_index=index,
+            )
+            session.add(child)
+            await session.flush()
+            await add_children(item.get("children") or [], child)
+
+    await add_children(template.items, root)
+    return root
 
 
 async def reorder_task_lists(

@@ -11,7 +11,7 @@ from home_manager.planning.router import router as planning_router
 from home_manager.preferences.router import router as preferences_router
 from home_manager.smarthome.router import router as smarthome_router
 from home_manager.tasks.router import router as tasks_router
-from home_manager.tasks.router import task_lists_router
+from home_manager.tasks.router import task_lists_router, task_templates_router
 from home_manager.users.router import router as users_router
 
 api_router = APIRouter(prefix="/api/v1")
@@ -20,6 +20,7 @@ api_router.include_router(auth_router)
 api_router.include_router(users_router)
 api_router.include_router(tasks_router)
 api_router.include_router(task_lists_router)
+api_router.include_router(task_templates_router)
 api_router.include_router(calendar_router)
 api_router.include_router(finance_router)
 api_router.include_router(preferences_router)

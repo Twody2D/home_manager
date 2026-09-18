@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -15,7 +16,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from home_manager.db.base import Base
@@ -66,6 +67,52 @@ class TaskList(Base):
     # Manual sort position among a household's lists, for drag-and-drop
     # reordering of the folder tabs — same convention as Task.order_index.
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=utcnow, nullable=False
+    )
+
+
+class TaskTemplate(Base):
+    """A reusable task tree for a folder — e.g. every release in "Треки"
+    needs the same distribution/pitching subtasks. Applying one creates the
+    whole tree at once under a title the user gives at that moment.
+
+    The tree lives in a JSON column rather than its own table: it's always
+    read, edited and saved as one document by the template form, and it
+    never needs to be queried by its individual nodes.
+    """
+
+    __tablename__ = "task_templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Which folder the template belongs to; null means it's offered in the
+    # default "My tasks" bucket. Deleting the folder takes its templates.
+    list_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("task_lists.id", ondelete="CASCADE"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Defaults applied to the root task the template creates.
+    priority: Mapped[TaskPriority] = mapped_column(
+        Enum(TaskPriority, name="task_priority", native_enum=True),
+        nullable=False,
+        default=TaskPriority.MEDIUM,
+    )
+    duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # List of nested item dicts — see TaskTemplateItem in schemas.py for the
+    # exact shape, which is what validates it on the way in.
+    items: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

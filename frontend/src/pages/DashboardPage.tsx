@@ -149,6 +149,7 @@ export function DashboardPage() {
           task.budget_owner_user_id ? membersById.get(task.budget_owner_user_id) : undefined
         }
         path={buildTaskPath(task, tasksById, listsById, t("tasks.myTasks"))}
+        folderOwnerId={task.list_id ? listsById.get(task.list_id)?.owner_user_id : undefined}
         isUpdating={updateTask.isPending}
         onToggleComplete={handleComplete}
         onDelete={handleDelete}

@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   DndContext,
   PointerSensor,
@@ -23,10 +23,12 @@ import { TaskForm } from "../components/TaskForm";
 import { TaskCard } from "../components/TaskCard";
 import { SortableListItem } from "../components/SortableListItem";
 import {
+  useApplyTaskTemplate,
   useCreateTask,
   useCreateTaskList,
   useDeleteTask,
   useDeleteTaskList,
+  useTaskTemplates,
   useUpdateTaskList,
   useReorderTaskLists,
   useReorderTasks,
@@ -36,7 +38,7 @@ import {
 } from "../hooks/useTasks";
 import { useMembers } from "../hooks/useMembers";
 import { useAuth } from "../auth/useAuth";
-import type { Task, TaskList, User } from "../api/types";
+import type { Task, TaskList, TaskTemplate, User } from "../api/types";
 
 // "all" = every list combined (drag-and-drop is only enabled here when the
 // visible tasks happen to all share one real list_id — otherwise siblings
@@ -155,6 +157,7 @@ function TaskListTabs({
   moveTargets: SectionOption[];
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const createTaskList = useCreateTaskList();
   const updateTaskList = useUpdateTaskList();
   const deleteTaskList = useDeleteTaskList();
@@ -330,6 +333,16 @@ function TaskListTabs({
                 >
                   {t("tasks.renameList")}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    navigate(`/templates?list=${activeList.id}`);
+                  }}
+                  className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  {t("templates.manage")}
+                </button>
                 {moveTargets
                   .filter((target) => target.ownerId !== activeList.owner_user_id)
                   .map((target) => (
@@ -393,6 +406,88 @@ function TaskListTabs({
   );
 }
 
+// Offered above the plain "new task" button when the open folder has
+// templates: pick one, type the one thing that differs (a track name), and
+// the whole subtask tree is created server-side in one request.
+function TemplateLauncher({
+  templates,
+  isApplying,
+  onApply,
+}: {
+  templates: TaskTemplate[];
+  isApplying: boolean;
+  onApply: (templateId: string, title: string) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+
+  const open = templates.find((template) => template.id === openId);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!open || !title.trim()) return;
+    await onApply(open.id, title.trim());
+    setTitle("");
+    setOpenId(null);
+  }
+
+  if (open) {
+    return (
+      <form
+        onSubmit={(e) => void handleSubmit(e)}
+        className="space-y-2 rounded-lg border border-blue-200 bg-blue-50/50 p-3"
+      >
+        <p className="text-xs font-medium text-slate-500">
+          {t("templates.applyHint", { name: open.name })}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            autoFocus
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={t("templates.applyTitlePlaceholder")}
+            className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={isApplying || !title.trim()}
+            className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {isApplying ? t("templates.applying") : t("templates.create")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpenId(null);
+              setTitle("");
+            }}
+            className="rounded-md px-2 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100"
+          >
+            {t("common.cancel")}
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {templates.map((template) => (
+        <button
+          key={template.id}
+          type="button"
+          onClick={() => setOpenId(template.id)}
+          className="rounded-full border border-blue-200 bg-blue-50 px-3.5 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+        >
+          + {template.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function splitByStatus(tasks: Task[]): { active: Task[]; completed: Task[] } {
   const active: Task[] = [];
   const completed: Task[] = [];
@@ -434,6 +529,7 @@ function TaskGroup({
   task,
   subtasksByParent,
   membersById,
+  folderOwnerId,
   isUpdating,
   onToggleComplete,
   onDelete,
@@ -443,6 +539,7 @@ function TaskGroup({
   task: Task;
   subtasksByParent: Map<string, Task[]>;
   membersById: Map<string, User>;
+  folderOwnerId: string | null | undefined;
   isUpdating: boolean;
   onToggleComplete: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -467,6 +564,7 @@ function TaskGroup({
               budgetOwner={
                 task.budget_owner_user_id ? membersById.get(task.budget_owner_user_id) : undefined
               }
+              folderOwnerId={folderOwnerId}
               subtaskToggle={
                 hasSubtasks
                   ? {
@@ -500,6 +598,7 @@ function TaskGroup({
                 task={subtask}
                 subtasksByParent={subtasksByParent}
                 membersById={membersById}
+                folderOwnerId={folderOwnerId}
                 isUpdating={isUpdating}
                 onToggleComplete={onToggleComplete}
                 onDelete={onDelete}
@@ -523,6 +622,7 @@ interface SiblingGroup {
 export function TasksPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   // Both live in the URL so a reload (or a link from a task's breadcrumb)
   // lands back on the same section and folder.
@@ -570,6 +670,9 @@ export function TasksPage() {
     activeSection === "all"
       ? taskLists
       : taskLists.filter((list) => list.owner_user_id === currentSection.ownerId);
+  const folderOwnerById = new Map<string | null, string | null>(
+    taskLists.map((list) => [list.id, list.owner_user_id]),
+  );
 
   const tasksQuery = useTasks({
     // Must cover the whole household task set — this page groups everything
@@ -579,10 +682,15 @@ export function TasksPage() {
     // matching comment on the backend's /tasks limit cap).
     limit: 1000,
   });
+  // Templates belong to a folder, so they're only offered once one is open.
+  const templatesQuery = useTaskTemplates(activeListId === "all" ? undefined : activeListId);
+  const templates = activeListId === "all" ? [] : (templatesQuery.data?.items ?? []);
+
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const reorderTasks = useReorderTasks();
+  const applyTemplate = useApplyTaskTemplate();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -827,6 +935,17 @@ export function TasksPage() {
         moveTargets={sectionOptions.filter((option) => option.key !== "all")}
       />
 
+      {templates.length > 0 && !isAddingTask && (
+        <TemplateLauncher
+          templates={templates}
+          isApplying={applyTemplate.isPending}
+          onApply={async (templateId, title) => {
+            const task = await applyTemplate.mutateAsync({ id: templateId, input: { title } });
+            navigate(`/tasks/${task.id}`);
+          }}
+        />
+      )}
+
       {!isAddingTask ? (
         <button
           type="button"
@@ -883,6 +1002,7 @@ export function TasksPage() {
                               task={task}
                               subtasksByParent={subtasksByParent}
                               membersById={membersById}
+                              folderOwnerId={folderOwnerById.get(task.list_id)}
                               isUpdating={updateTask.isPending}
                               onToggleComplete={handleToggleComplete}
                               onDelete={(t) => deleteTask.mutate(t.id)}
@@ -915,6 +1035,7 @@ export function TasksPage() {
                               ? membersById.get(task.budget_owner_user_id)
                               : undefined
                           }
+                          folderOwnerId={folderOwnerById.get(task.list_id)}
                           isUpdating={updateTask.isPending}
                           onToggleComplete={handleToggleComplete}
                           onDelete={(t) => deleteTask.mutate(t.id)}

@@ -20,11 +20,17 @@ from home_manager.tasks.schemas import (
     TaskPageResponse,
     TaskReorderRequest,
     TaskResponse,
+    TaskTemplateApplyRequest,
+    TaskTemplateCreate,
+    TaskTemplateResponse,
+    TaskTemplatesResponse,
+    TaskTemplateUpdate,
     TaskUpdate,
 )
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 task_lists_router = APIRouter(prefix="/task-lists", tags=["tasks"])
+task_templates_router = APIRouter(prefix="/task-templates", tags=["tasks"])
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
@@ -168,3 +174,77 @@ async def delete_task_list(
 ) -> None:
     await service.delete_task_list(session, tenant_id=current_user.tenant_id, list_id=list_id)
     await session.commit()
+
+
+@task_templates_router.post(
+    "", response_model=TaskTemplateResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_task_template(
+    payload: TaskTemplateCreate, current_user: CurrentUser, session: DbSession
+) -> TaskTemplateResponse:
+    template = await service.create_task_template(
+        session, tenant_id=current_user.tenant_id, created_by=current_user.id, payload=payload
+    )
+    await session.commit()
+    return TaskTemplateResponse.model_validate(template)
+
+
+@task_templates_router.get("", response_model=TaskTemplatesResponse)
+async def list_task_templates(
+    current_user: CurrentUser,
+    session: DbSession,
+    list_id: uuid.UUID | None = None,
+    # Without this, "?list_id=" (the default bucket) would be
+    # indistinguishable from omitting the filter to list every template.
+    only_list: bool = False,
+) -> TaskTemplatesResponse:
+    items = await service.list_task_templates(
+        session, tenant_id=current_user.tenant_id, list_id=list_id, list_id_set=only_list
+    )
+    return TaskTemplatesResponse(
+        items=[TaskTemplateResponse.model_validate(item) for item in items]
+    )
+
+
+@task_templates_router.patch("/{template_id}", response_model=TaskTemplateResponse)
+async def update_task_template(
+    template_id: uuid.UUID,
+    payload: TaskTemplateUpdate,
+    current_user: CurrentUser,
+    session: DbSession,
+) -> TaskTemplateResponse:
+    template = await service.update_task_template(
+        session, tenant_id=current_user.tenant_id, template_id=template_id, payload=payload
+    )
+    await session.commit()
+    return TaskTemplateResponse.model_validate(template)
+
+
+@task_templates_router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_task_template(
+    template_id: uuid.UUID, current_user: CurrentUser, session: DbSession
+) -> None:
+    await service.delete_task_template(
+        session, tenant_id=current_user.tenant_id, template_id=template_id
+    )
+    await session.commit()
+
+
+@task_templates_router.post(
+    "/{template_id}/apply", response_model=TaskResponse, status_code=status.HTTP_201_CREATED
+)
+async def apply_task_template(
+    template_id: uuid.UUID,
+    payload: TaskTemplateApplyRequest,
+    current_user: CurrentUser,
+    session: DbSession,
+) -> TaskResponse:
+    task = await service.apply_task_template(
+        session,
+        tenant_id=current_user.tenant_id,
+        created_by=current_user.id,
+        template_id=template_id,
+        payload=payload,
+    )
+    await session.commit()
+    return TaskResponse.model_validate(task)

@@ -33,6 +33,10 @@ interface TaskCardProps {
   // flat list that mixes subtasks in with root tasks (e.g. the dashboard),
   // so it's clear where in the tree the task actually lives.
   path?: string[];
+  // Owner of the folder this task is in. A task assigned to that same person
+  // doesn't get an assignee label — being in someone's own folder already
+  // says whose it is; the label is only informative in shared folders.
+  folderOwnerId?: string | null;
   // Present only when this task has subtasks — renders a chevron that
   // expands/collapses them, so a long subtask list can be tucked away.
   subtaskToggle?: { expanded: boolean; onToggle: () => void };
@@ -54,9 +58,10 @@ interface TaskCardProps {
 
 export function TaskCard({
   task,
-  assignee,
+  assignee: assigneeProp,
   budgetOwner,
   path,
+  folderOwnerId,
   subtaskToggle,
   onToggleComplete,
   onDelete,
@@ -69,6 +74,8 @@ export function TaskCard({
 }: TaskCardProps) {
   const { t, i18n } = useTranslation();
   const isCompleted = task.status === "completed";
+  const assignee =
+    assigneeProp && assigneeProp.id === folderOwnerId ? undefined : assigneeProp;
 
   return (
     <li
