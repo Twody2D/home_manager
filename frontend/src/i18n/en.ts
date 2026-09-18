@@ -69,6 +69,8 @@ export const en = {
     durationPlaceholder: "Minutes",
     addItem: "Add subtask",
     addSubitem: "Nested",
+    addDescription: "Description",
+    descriptionPlaceholder: "Description — what exactly to do",
     removeItem: "Remove item",
     useTrackStarter: "Fill with the track structure",
     applyHint: 'Template "{{name}}" — enter a title',

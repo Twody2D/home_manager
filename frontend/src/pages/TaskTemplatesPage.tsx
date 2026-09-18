@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -17,7 +17,41 @@ const PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
 const MAX_ITEM_DEPTH = 3;
 
 function emptyItem(): TaskTemplateItem {
-  return { title: "", priority: "medium", duration_minutes: null, children: [] };
+  return { title: "", description: null, priority: "medium", duration_minutes: null, children: [] };
+}
+
+/** Grows to fit its text instead of scrolling inside a fixed box, so a long
+ * checklist description is readable while editing it. */
+function AutoTextarea({
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  className: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={2}
+      className={`resize-none overflow-hidden ${className}`}
+    />
+  );
 }
 
 // The structure every release already follows — offered as the starting
@@ -26,6 +60,7 @@ function emptyItem(): TaskTemplateItem {
 function trackStarterItems(): TaskTemplateItem[] {
   const item = (title: string, children: TaskTemplateItem[] = []): TaskTemplateItem => ({
     title,
+    description: null,
     priority: "medium",
     duration_minutes: null,
     children,
@@ -85,6 +120,10 @@ function ItemRow({
   onRemove: (path: number[]) => void;
 }) {
   const { t } = useTranslation();
+  // Descriptions are optional and most items don't need one, so the field
+  // only takes up space once it's asked for (or already holds text).
+  const [showDescription, setShowDescription] = useState(Boolean(item.description));
+
   return (
     <li className="space-y-1.5">
       <div className="space-y-1.5 rounded-lg border border-slate-200 bg-white p-2">
@@ -109,6 +148,17 @@ function ItemRow({
             </svg>
           </button>
         </div>
+        {showDescription && (
+          <AutoTextarea
+            value={item.description ?? ""}
+            onChange={(value) =>
+              onChange(path, (current) => ({ ...current, description: value || null }))
+            }
+            placeholder={t("templates.descriptionPlaceholder")}
+            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          />
+        )}
+
         <div className="flex flex-wrap items-center gap-1.5">
           <select
             value={item.priority}
@@ -139,6 +189,15 @@ function ItemRow({
             placeholder={t("templates.durationPlaceholder")}
             className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs"
           />
+          {!showDescription && (
+            <button
+              type="button"
+              onClick={() => setShowDescription(true)}
+              className="rounded-md border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50"
+            >
+              + {t("templates.addDescription")}
+            </button>
+          )}
           {depth < MAX_ITEM_DEPTH && (
             <button
               type="button"
@@ -184,6 +243,7 @@ function TemplateForm({
   const updateTemplate = useUpdateTaskTemplate();
 
   const [name, setName] = useState(template?.name ?? "");
+  const [description, setDescription] = useState(template?.description ?? "");
   const [priority, setPriority] = useState<TaskPriority>(template?.priority ?? "medium");
   const [duration, setDuration] = useState(
     template?.duration_minutes ? String(template.duration_minutes) : "",
@@ -211,6 +271,7 @@ function TemplateForm({
     const input = {
       name: name.trim(),
       list_id: listId,
+      description: description.trim() || null,
       priority,
       duration_minutes: duration ? Number(duration) : null,
       // A blank row the user never filled in would fail validation server
@@ -231,6 +292,12 @@ function TemplateForm({
           onChange={(e) => setName(e.target.value)}
           placeholder={t("templates.namePlaceholder")}
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium focus:border-blue-500 focus:outline-none"
+        />
+        <AutoTextarea
+          value={description}
+          onChange={setDescription}
+          placeholder={t("templates.descriptionPlaceholder")}
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
         />
         <p className="text-xs text-slate-500">{t("templates.rootHint")}</p>
         <div className="flex flex-wrap gap-2">
@@ -316,7 +383,12 @@ function TemplateForm({
 function pruneEmpty(items: TaskTemplateItem[]): TaskTemplateItem[] {
   return items
     .filter((item) => item.title.trim() !== "")
-    .map((item) => ({ ...item, title: item.title.trim(), children: pruneEmpty(item.children) }));
+    .map((item) => ({
+      ...item,
+      title: item.title.trim(),
+      description: item.description?.trim() || null,
+      children: pruneEmpty(item.children),
+    }));
 }
 
 export function TaskTemplatesPage() {

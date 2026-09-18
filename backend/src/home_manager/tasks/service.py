@@ -492,6 +492,7 @@ async def create_task_template(
         created_by=created_by,
         list_id=payload.list_id,
         name=payload.name,
+        description=payload.description,
         priority=payload.priority,
         duration_minutes=payload.duration_minutes,
         items=[item.model_dump(mode="json") for item in payload.items],
@@ -534,6 +535,7 @@ async def update_task_template(
     await _ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=payload.list_id)
     template.name = payload.name
     template.list_id = payload.list_id
+    template.description = payload.description
     template.priority = payload.priority
     template.duration_minutes = payload.duration_minutes
     template.items = [item.model_dump(mode="json") for item in payload.items]
@@ -575,6 +577,7 @@ async def apply_task_template(
         assigned_to=created_by,
         budget_owner_user_id=created_by,
         title=payload.title,
+        description=template.description,
         status=TaskStatus.PENDING,
         priority=template.priority,
         duration_minutes=template.duration_minutes,
@@ -594,6 +597,7 @@ async def apply_task_template(
                 assigned_to=created_by,
                 budget_owner_user_id=created_by,
                 title=item["title"],
+                description=item.get("description"),
                 status=TaskStatus.PENDING,
                 priority=item.get("priority", TaskPriority.MEDIUM),
                 duration_minutes=item.get("duration_minutes"),

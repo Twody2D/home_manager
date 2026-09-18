@@ -130,6 +130,7 @@ class TaskTemplateItem(BaseModel):
     which is what gives the template its subtask structure."""
 
     title: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=5000)
     priority: TaskPriority = TaskPriority.MEDIUM
     duration_minutes: int | None = Field(default=None, gt=0)
     children: list["TaskTemplateItem"] = Field(default_factory=list)
@@ -153,6 +154,7 @@ def _validate_tree(items: list[TaskTemplateItem], depth: int = 1) -> int:
 class TaskTemplateBase(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     list_id: uuid.UUID | None = None
+    description: str | None = Field(default=None, max_length=5000)
     priority: TaskPriority = TaskPriority.MEDIUM
     duration_minutes: int | None = Field(default=None, gt=0)
     items: list[TaskTemplateItem] = Field(default_factory=list)
@@ -182,6 +184,7 @@ class TaskTemplateResponse(BaseModel):
     created_by: uuid.UUID | None
     list_id: uuid.UUID | None
     name: str
+    description: str | None
     priority: TaskPriority
     duration_minutes: int | None
     items: list[TaskTemplateItem]

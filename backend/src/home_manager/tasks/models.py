@@ -104,6 +104,7 @@ class TaskTemplate(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     # Defaults applied to the root task the template creates.
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     priority: Mapped[TaskPriority] = mapped_column(
         Enum(TaskPriority, name="task_priority", native_enum=True),
         nullable=False,

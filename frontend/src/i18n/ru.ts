@@ -71,6 +71,8 @@ export const ru: typeof en = {
     durationPlaceholder: "Минут",
     addItem: "Добавить подзадачу",
     addSubitem: "Вложенная",
+    addDescription: "Описание",
+    descriptionPlaceholder: "Описание — что именно нужно сделать",
     removeItem: "Удалить пункт",
     useTrackStarter: "Заполнить структурой трека",
     applyHint: "Шаблон «{{name}}» — введите название",

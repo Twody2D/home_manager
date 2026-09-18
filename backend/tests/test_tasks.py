@@ -984,10 +984,11 @@ TRACK_TEMPLATE_ITEMS = [
     {"title": "Видео сторис", "duration_minutes": 60},
     {
         "title": "Дистрибьюция",
+        "description": "Через дистрибьютора, за 2 недели до релиза",
         "children": [
             {"title": "Форма дистрибьюции"},
             {"title": "Текст"},
-            {"title": "Обложка"},
+            {"title": "Обложка", "description": "3000×3000, без текста по краям"},
         ],
     },
     {
@@ -1022,6 +1023,7 @@ async def test_create_and_apply_task_template(
         json={
             "name": "Новый трек",
             "list_id": list_id,
+            "description": "Чеклист релиза",
             "duration_minutes": 30,
             "items": TRACK_TEMPLATE_ITEMS,
         },
@@ -1056,6 +1058,11 @@ async def test_create_and_apply_task_template(
     assert by_title["VK музыка"]["parent_task_id"] == by_title["Площадки"]["id"]
     assert by_title["Питчинг"]["priority"] == "high"
     assert by_title["Видео сторис"]["duration_minutes"] == 60
+    # Descriptions come along at every level, root included.
+    assert root["description"] == "Чеклист релиза"
+    assert by_title["Дистрибьюция"]["description"] == "Через дистрибьютора, за 2 недели до релиза"
+    assert by_title["Обложка"]["description"] == "3000×3000, без текста по краям"
+    assert by_title["Текст"]["description"] is None
     # Every task lands in the template's folder, including the deep ones.
     assert all(task["list_id"] == list_id for task in tasks)
     assert all(task["assigned_to"] == owner_id for task in tasks)

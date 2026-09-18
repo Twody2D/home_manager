@@ -102,6 +102,7 @@ export type TaskListUpdateInput = Partial<TaskListCreateInput>;
 
 export interface TaskTemplateItem {
   title: string;
+  description: string | null;
   priority: TaskPriority;
   duration_minutes: number | null;
   children: TaskTemplateItem[];
@@ -113,6 +114,7 @@ export interface TaskTemplate {
   created_by: string | null;
   list_id: string | null;
   name: string;
+  description: string | null;
   priority: TaskPriority;
   duration_minutes: number | null;
   items: TaskTemplateItem[];
@@ -127,6 +129,7 @@ export interface TaskTemplatesResponse {
 export interface TaskTemplateInput {
   name: string;
   list_id: string | null;
+  description: string | null;
   priority: TaskPriority;
   duration_minutes: number | null;
   items: TaskTemplateItem[];
