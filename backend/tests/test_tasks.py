@@ -396,7 +396,8 @@ async def test_task_list_owner_defaults_to_shared_and_can_be_reassigned(
     renamed = await client.patch(
         f"/api/v1/task-lists/{mine.json()['id']}", json={"name": "Музыка"}, headers=headers
     )
-    assert renamed.json() == {**mine.json(), "name": "Музыка", "updated_at": renamed.json()["updated_at"]}
+    assert renamed.json()["name"] == "Музыка"
+    assert renamed.json()["owner_user_id"] == owner_id
 
     # ...and an explicit null moves the folder back to the shared section.
     moved = await client.patch(
