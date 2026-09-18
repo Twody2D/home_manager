@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as tasksApi from "../api/tasks";
-import type { TaskCreateInput, TaskListCreateInput, TaskUpdateInput } from "../api/types";
+import type {
+  TaskCreateInput,
+  TaskListCreateInput,
+  TaskListUpdateInput,
+  TaskUpdateInput,
+} from "../api/types";
 
 const TASKS_KEY = ["tasks"] as const;
 const TASK_LISTS_KEY = ["task-lists"] as const;
@@ -73,11 +78,11 @@ export function useCreateTaskList() {
   });
 }
 
-export function useRenameTaskList() {
+export function useUpdateTaskList() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: TaskListCreateInput }) =>
-      tasksApi.renameTaskList(id, input),
+    mutationFn: ({ id, input }: { id: string; input: TaskListUpdateInput }) =>
+      tasksApi.updateTaskList(id, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: TASK_LISTS_KEY }),
   });
 }

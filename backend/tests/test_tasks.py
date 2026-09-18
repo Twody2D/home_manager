@@ -376,6 +376,54 @@ async def test_rename_and_delete_task_list(
 
 
 @pytest.mark.asyncio
+async def test_task_list_owner_defaults_to_shared_and_can_be_reassigned(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    owner_id = owner["user"]["id"]
+
+    shared = await client.post("/api/v1/task-lists", json={"name": "Общие"}, headers=headers)
+    assert shared.status_code == 201, shared.text
+    assert shared.json()["owner_user_id"] is None
+
+    mine = await client.post(
+        "/api/v1/task-lists", json={"name": "Треки", "owner_user_id": owner_id}, headers=headers
+    )
+    assert mine.json()["owner_user_id"] == owner_id
+
+    # Renaming on its own leaves the section alone...
+    renamed = await client.patch(
+        f"/api/v1/task-lists/{mine.json()['id']}", json={"name": "Музыка"}, headers=headers
+    )
+    assert renamed.json() == {**mine.json(), "name": "Музыка", "updated_at": renamed.json()["updated_at"]}
+
+    # ...and an explicit null moves the folder back to the shared section.
+    moved = await client.patch(
+        f"/api/v1/task-lists/{mine.json()['id']}", json={"owner_user_id": None}, headers=headers
+    )
+    assert moved.json()["owner_user_id"] is None
+    assert moved.json()["name"] == "Музыка"
+
+
+@pytest.mark.asyncio
+async def test_task_list_owner_must_be_in_same_household(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner_a = await register_household(client, email="owner-a@example.com")
+    owner_b = await register_household(client, email="owner-b@example.com")
+
+    response = await client.post(
+        "/api/v1/task-lists",
+        json={"name": "Чужая", "owner_user_id": owner_b["user"]["id"]},
+        headers=_auth_headers(owner_a),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_TASK_LIST_OWNER"
+
+
+@pytest.mark.asyncio
 async def test_reorder_task_lists(
     client: AsyncClient, register_household: RegisterHousehold
 ) -> None:

@@ -80,8 +80,13 @@ export const en = {
     allLists: "All tasks",
     quickAdd: "New task",
     listMenu: "List menu",
+    moveToSection: 'Move to "{{section}}"',
+    sections: {
+      shared: "Shared folders",
+      mine: "My folders",
+      partner: "{{name}}'s folders",
+    },
     completedCount: "Completed ({{count}})",
-    subtaskOf: "Subtask of: {{title}}",
     confirmDelete: 'Delete "{{title}}"?',
     detail: {
       back: "Back",
@@ -95,7 +100,7 @@ export const en = {
       assignee: "Assignee",
       list: "List",
       subtasksTitle: "Subtasks",
-      parentTask: 'Subtask of "{{title}}"',
+      path: "Task path",
       markComplete: "Mark complete",
       markIncomplete: "Mark as pending",
       duplicate: "Duplicate",

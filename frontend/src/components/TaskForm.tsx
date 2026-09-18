@@ -6,22 +6,32 @@ import type { TaskCreateInput, TaskPriority, User } from "../api/types";
 interface TaskFormProps {
   members: User[];
   listId: string | null;
+  // Whoever is adding the task is the assignee and budget owner by default —
+  // adding something for the other member is the rarer case, so it's a
+  // deliberate change in the dropdown rather than the starting point.
+  currentUserId?: string;
   onSubmit: (input: TaskCreateInput) => Promise<void>;
   isSubmitting: boolean;
 }
 
 const PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
-export function TaskForm({ members, listId, onSubmit, isSubmitting }: TaskFormProps) {
+export function TaskForm({
+  members,
+  listId,
+  currentUserId,
+  onSubmit,
+  isSubmitting,
+}: TaskFormProps) {
   const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
-  const [assignedTo, setAssignedTo] = useState("");
+  const [assignedTo, setAssignedTo] = useState(currentUserId ?? "");
   const [dueAt, setDueAt] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("");
   const [showBudget, setShowBudget] = useState(false);
   const [budgetAmount, setBudgetAmount] = useState("");
-  const [budgetOwnerId, setBudgetOwnerId] = useState("");
+  const [budgetOwnerId, setBudgetOwnerId] = useState(currentUserId ?? "");
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -40,12 +50,12 @@ export function TaskForm({ members, listId, onSubmit, isSubmitting }: TaskFormPr
 
     setTitle("");
     setPriority("medium");
-    setAssignedTo("");
+    setAssignedTo(currentUserId ?? "");
     setDueAt("");
     setDurationMinutes("");
     setShowBudget(false);
     setBudgetAmount("");
-    setBudgetOwnerId("");
+    setBudgetOwnerId(currentUserId ?? "");
   }
 
   return (
@@ -136,7 +146,7 @@ export function TaskForm({ members, listId, onSubmit, isSubmitting }: TaskFormPr
               onClick={() => {
                 setShowBudget(false);
                 setBudgetAmount("");
-                setBudgetOwnerId("");
+                setBudgetOwnerId(currentUserId ?? "");
               }}
               className="rounded-md px-2 py-1.5 text-sm font-medium text-slate-500 hover:bg-slate-100"
             >

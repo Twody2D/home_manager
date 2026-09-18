@@ -55,6 +55,13 @@ class TaskList(Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # Which member's section this folder is filed under — null means the
+    # household's shared section. Purely organisational: every member still
+    # sees (and can open) every folder, same as before. Separate from
+    # created_by, which records who made it and never changes.
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     # Manual sort position among a household's lists, for drag-and-drop
     # reordering of the folder tabs — same convention as Task.order_index.

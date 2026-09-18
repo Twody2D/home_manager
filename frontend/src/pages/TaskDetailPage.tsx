@@ -25,7 +25,13 @@ import {
   useUpdateTask,
 } from "../hooks/useTasks";
 import { useMembers } from "../hooks/useMembers";
+import { useAuth } from "../auth/useAuth";
+import { buildTaskPathSegments, TASK_PATH_SEPARATOR } from "../lib/taskPath";
 import type { Task, TaskPriority, TaskUpdateInput } from "../api/types";
+
+function listLink(listId: string | null | undefined): string {
+  return listId ? `/tasks?list=${listId}` : "/tasks";
+}
 
 // Levels: task / subtask / sub-subtask / sub-sub-subtask — kept in sync
 // with MAX_TASK_DEPTH in the backend's tasks/service.py.
@@ -124,10 +130,10 @@ export function TaskDetailPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { taskId } = useParams<{ taskId: string }>();
+  const { user } = useAuth();
 
   const taskQuery = useTask(taskId);
   const task = taskQuery.data;
-  const parentQuery = useTask(task?.parent_task_id ?? undefined);
   const membersQuery = useMembers();
   const taskListsQuery = useTaskLists();
   // Must cover the whole household task set — see the matching comment in
@@ -281,7 +287,14 @@ export function TaskDetailPage() {
   async function handleAddSubtask(event: FormEvent) {
     event.preventDefault();
     if (!task || !subtaskTitle.trim()) return;
-    await createTask.mutateAsync({ title: subtaskTitle.trim(), parent_task_id: task.id });
+    await createTask.mutateAsync({
+      title: subtaskTitle.trim(),
+      parent_task_id: task.id,
+      // Same default as the main task form: what I add is mine unless I say
+      // otherwise (changeable on the subtask's own page).
+      assigned_to: user?.id ?? null,
+      budget_owner_user_id: user?.id ?? null,
+    });
     setSubtaskTitle("");
     setIsAddingSubtask(false);
   }
@@ -433,6 +446,12 @@ export function TaskDetailPage() {
 
   const isCompleted = task.status === "completed";
   const isSubtask = task.parent_task_id !== null;
+  const pathSegments = buildTaskPathSegments(
+    task,
+    byId,
+    new Map(taskLists.map((list) => [list.id, list])),
+    t("tasks.myTasks"),
+  );
   // A task can have children as long as they'd still fit under the depth
   // cap — only a task at the deepest allowed level can't.
   const canHaveSubtasks = taskDepth(task.id) < MAX_TASK_DEPTH - 1;
@@ -450,10 +469,20 @@ export function TaskDetailPage() {
         {t("tasks.detail.back")}
       </button>
 
-      {isSubtask && parentQuery.data && (
-        <p className="text-xs text-slate-500">
-          {t("tasks.detail.parentTask", { title: parentQuery.data.title })}
-        </p>
+      {pathSegments.length > 0 && (
+        <nav aria-label={t("tasks.detail.path")} className="flex flex-wrap items-center text-xs text-slate-500">
+          {pathSegments.map((segment, index) => (
+            <span key={segment.taskId ?? `list:${segment.listId ?? "none"}`} className="flex items-center">
+              {index > 0 && <span className="px-1 text-slate-300">{TASK_PATH_SEPARATOR.trim()}</span>}
+              <Link
+                to={segment.taskId ? `/tasks/${segment.taskId}` : listLink(segment.listId)}
+                className="hover:text-slate-700 hover:underline"
+              >
+                {segment.label}
+              </Link>
+            </span>
+          ))}
+        </nav>
       )}
 
       <input

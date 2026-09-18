@@ -49,6 +49,12 @@ class TaskListNotFoundError(AppError):
     message = "Task list not found"
 
 
+class InvalidTaskListOwnerError(AppError):
+    code = "INVALID_TASK_LIST_OWNER"
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    message = "Folder owner must be a member of the same household"
+
+
 class InvalidTaskListError(AppError):
     code = "INVALID_TASK_LIST"
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
@@ -94,6 +100,16 @@ async def _ensure_budget_owner_in_tenant(
     owner = await session.get(User, budget_owner_user_id)
     if owner is None or owner.tenant_id != tenant_id:
         raise InvalidBudgetOwnerError()
+
+
+async def _ensure_list_owner_in_tenant(
+    session: AsyncSession, *, tenant_id: uuid.UUID, owner_user_id: uuid.UUID | None
+) -> None:
+    if owner_user_id is None:
+        return
+    owner = await session.get(User, owner_user_id)
+    if owner is None or owner.tenant_id != tenant_id:
+        raise InvalidTaskListOwnerError()
 
 
 async def _ensure_list_in_tenant(
@@ -384,6 +400,9 @@ async def reorder_tasks(
 async def create_task_list(
     session: AsyncSession, *, tenant_id: uuid.UUID, created_by: uuid.UUID, payload: TaskListCreate
 ) -> TaskList:
+    await _ensure_list_owner_in_tenant(
+        session, tenant_id=tenant_id, owner_user_id=payload.owner_user_id
+    )
     order_index = (
         await session.scalar(
             select(func.coalesce(func.max(TaskList.order_index), -1) + 1).where(
@@ -393,7 +412,11 @@ async def create_task_list(
         or 0
     )
     task_list = TaskList(
-        tenant_id=tenant_id, created_by=created_by, name=payload.name, order_index=order_index
+        tenant_id=tenant_id,
+        created_by=created_by,
+        owner_user_id=payload.owner_user_id,
+        name=payload.name,
+        order_index=order_index,
     )
     session.add(task_list)
     await session.flush()
@@ -426,7 +449,13 @@ async def update_task_list(
     payload: TaskListUpdate,
 ) -> TaskList:
     task_list = await get_task_list(session, tenant_id=tenant_id, list_id=list_id)
-    task_list.name = payload.name
+    updates = payload.model_dump(exclude_unset=True)
+    if "owner_user_id" in updates:
+        await _ensure_list_owner_in_tenant(
+            session, tenant_id=tenant_id, owner_user_id=updates["owner_user_id"]
+        )
+    for field, value in updates.items():
+        setattr(task_list, field, value)
     await session.flush()
     return task_list
 

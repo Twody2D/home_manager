@@ -82,8 +82,13 @@ export const ru: typeof en = {
     allLists: "Все задачи",
     quickAdd: "Новая задача",
     listMenu: "Меню папки",
+    moveToSection: "Перенести в «{{section}}»",
+    sections: {
+      shared: "Общие папки",
+      mine: "Мои папки",
+      partner: "Папки: {{name}}",
+    },
     completedCount: "Выполнено ({{count}})",
-    subtaskOf: "Подзадача: {{title}}",
     confirmDelete: "Удалить «{{title}}»?",
     detail: {
       back: "Назад",
@@ -97,7 +102,7 @@ export const ru: typeof en = {
       assignee: "Исполнитель",
       list: "Папка",
       subtasksTitle: "Подзадачи",
-      parentTask: "Подзадача из «{{title}}»",
+      path: "Путь к задаче",
       markComplete: "Отметить выполненной",
       markIncomplete: "Вернуть в активные",
       duplicate: "Дублировать",

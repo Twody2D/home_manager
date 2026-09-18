@@ -27,7 +27,7 @@ import {
   useCreateTaskList,
   useDeleteTask,
   useDeleteTaskList,
-  useRenameTaskList,
+  useUpdateTaskList,
   useReorderTaskLists,
   useReorderTasks,
   useTaskLists,
@@ -107,22 +107,62 @@ function SortableTab({
   return <>{children({ innerRef: setNodeRef, style, dragHandleProps: { ...attributes, ...listeners } })}</>;
 }
 
+// Folders are filed under a section — the household's shared one, mine, or
+// my partner's — purely for organisation: every member still sees all of
+// them. ownerId is what a folder's owner_user_id has to equal to land here.
+interface FolderSection {
+  key: string;
+  label: string;
+  ownerId: string | null;
+  lists: TaskList[];
+}
+
+function useFolderSections(taskLists: TaskList[], currentUserId: string | undefined, partner: User | undefined) {
+  const { t } = useTranslation();
+  const sections: FolderSection[] = [
+    { key: "shared", label: t("tasks.sections.shared"), ownerId: null, lists: [] },
+  ];
+  if (currentUserId) {
+    sections.push({ key: "mine", label: t("tasks.sections.mine"), ownerId: currentUserId, lists: [] });
+  }
+  if (partner) {
+    sections.push({
+      key: "partner",
+      label: t("tasks.sections.partner", { name: partner.display_name }),
+      ownerId: partner.id,
+      lists: [],
+    });
+  }
+
+  for (const list of taskLists) {
+    // A folder owned by a former member (or by someone not in `members`
+    // yet) still has to show up somewhere, so it falls back to shared.
+    const section = sections.find((s) => s.ownerId === list.owner_user_id) ?? sections[0];
+    section.lists.push(list);
+  }
+  return sections;
+}
+
 function TaskListTabs({
   taskLists,
   activeListId,
   onSelect,
+  currentUserId,
+  partner,
 }: {
   taskLists: TaskList[];
   activeListId: ListScope;
   onSelect: (listId: ListScope) => void;
+  currentUserId: string | undefined;
+  partner: User | undefined;
 }) {
   const { t } = useTranslation();
   const createTaskList = useCreateTaskList();
-  const renameTaskList = useRenameTaskList();
+  const updateTaskList = useUpdateTaskList();
   const deleteTaskList = useDeleteTaskList();
   const reorderTaskLists = useReorderTaskLists();
 
-  const [isAdding, setIsAdding] = useState(false);
+  const [addingInSection, setAddingInSection] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -134,34 +174,43 @@ function TaskListTabs({
   const orderedLists = localOrder
     ? (localOrder.map((id) => taskLists.find((l) => l.id === id)).filter(Boolean) as TaskList[])
     : taskLists;
-
+  const sections = useFolderSections(orderedLists, currentUserId, partner);
   const activeList = taskLists.find((list) => list.id === activeListId);
 
-  function handleDragEnd(event: DragEndEvent) {
+  // Dragging only reorders within one section, but the backend's reorder
+  // takes the household's complete folder list — so the moved section's new
+  // order is spliced back into the full section-ordered sequence.
+  function handleDragEnd(event: DragEndEvent, section: FolderSection) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const ids = orderedLists.map((l) => l.id);
+    const ids = section.lists.map((l) => l.id);
     const oldIndex = ids.indexOf(String(active.id));
     const newIndex = ids.indexOf(String(over.id));
     if (oldIndex === -1 || newIndex === -1) return;
-    const reordered = arrayMove(ids, oldIndex, newIndex);
-    flushSync(() => setLocalOrder(reordered));
-    reorderTaskLists.mutate(reordered, { onSettled: () => setLocalOrder(null) });
+    const reorderedSection = arrayMove(ids, oldIndex, newIndex);
+    const full = sections.flatMap((s) =>
+      s.key === section.key ? reorderedSection : s.lists.map((l) => l.id),
+    );
+    flushSync(() => setLocalOrder(full));
+    reorderTaskLists.mutate(full, { onSettled: () => setLocalOrder(null) });
   }
 
-  async function handleAdd(event: FormEvent) {
+  async function handleAdd(event: FormEvent, ownerId: string | null) {
     event.preventDefault();
     if (!newName.trim()) return;
-    const list = await createTaskList.mutateAsync({ name: newName.trim() });
+    const list = await createTaskList.mutateAsync({
+      name: newName.trim(),
+      owner_user_id: ownerId,
+    });
     setNewName("");
-    setIsAdding(false);
+    setAddingInSection(null);
     onSelect(list.id);
   }
 
   async function handleRename(event: FormEvent) {
     event.preventDefault();
     if (!activeList || !renameValue.trim()) return;
-    await renameTaskList.mutateAsync({ id: activeList.id, input: { name: renameValue.trim() } });
+    await updateTaskList.mutateAsync({ id: activeList.id, input: { name: renameValue.trim() } });
     setIsRenaming(false);
   }
 
@@ -172,7 +221,7 @@ function TaskListTabs({
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-1">
         <button
           type="button"
@@ -183,70 +232,6 @@ function TaskListTabs({
         >
           {t("tasks.allLists")}
         </button>
-
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext
-            items={orderedLists.map((l) => l.id)}
-            strategy={horizontalListSortingStrategy}
-          >
-            {orderedLists.map((list) => (
-              <SortableTab key={list.id} id={list.id}>
-                {(slot) => (
-                  <button
-                    ref={slot.innerRef}
-                    style={slot.style}
-                    type="button"
-                    onClick={() => onSelect(list.id)}
-                    className={`touch-none rounded-full px-3.5 py-2 text-sm font-medium ${
-                      activeListId === list.id ? "bg-blue-600 text-white" : "bg-white text-slate-600"
-                    }`}
-                    {...slot.dragHandleProps}
-                  >
-                    {list.name}
-                  </button>
-                )}
-              </SortableTab>
-            ))}
-          </SortableContext>
-        </DndContext>
-
-        {isAdding ? (
-          <form onSubmit={(e) => void handleAdd(e)} className="flex items-center gap-1">
-            <input
-              type="text"
-              autoFocus
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder={t("tasks.newListPlaceholder")}
-              className="w-32 rounded-md border border-slate-300 px-2 py-1 text-sm"
-            />
-            <button
-              type="submit"
-              disabled={!newName.trim()}
-              className="rounded-md bg-blue-600 px-2 py-1 text-sm font-medium text-white disabled:opacity-60"
-            >
-              {t("common.add")}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIsAdding(false);
-                setNewName("");
-              }}
-              className="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
-            >
-              {t("common.cancel")}
-            </button>
-          </form>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setIsAdding(true)}
-            className="rounded-full border border-dashed border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50"
-          >
-            + {t("tasks.addList")}
-          </button>
-        )}
 
         {activeList && (
           <div
@@ -269,7 +254,7 @@ function TaskListTabs({
               </svg>
             </button>
             {menuOpen && (
-              <div className="absolute right-0 z-10 mt-1 w-44 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+              <div className="absolute right-0 z-10 mt-1 w-52 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg">
                 <button
                   type="button"
                   onClick={() => {
@@ -281,6 +266,24 @@ function TaskListTabs({
                 >
                   {t("tasks.renameList")}
                 </button>
+                {sections
+                  .filter((section) => section.ownerId !== activeList.owner_user_id)
+                  .map((section) => (
+                    <button
+                      key={section.key}
+                      type="button"
+                      onClick={() => {
+                        updateTaskList.mutate({
+                          id: activeList.id,
+                          input: { owner_user_id: section.ownerId },
+                        });
+                        setMenuOpen(false);
+                      }}
+                      className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      {t("tasks.moveToSection", { section: section.label })}
+                    </button>
+                  ))}
                 <button
                   type="button"
                   onClick={() => {
@@ -296,6 +299,91 @@ function TaskListTabs({
           </div>
         )}
       </div>
+
+      {sections.map((section) => (
+        <div key={section.key} className="space-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            {section.label}
+          </p>
+          <div className="flex flex-wrap items-center gap-1">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(event) => handleDragEnd(event, section)}
+            >
+              <SortableContext
+                items={section.lists.map((l) => l.id)}
+                strategy={horizontalListSortingStrategy}
+              >
+                {section.lists.map((list) => (
+                  <SortableTab key={list.id} id={list.id}>
+                    {(slot) => (
+                      <button
+                        ref={slot.innerRef}
+                        style={slot.style}
+                        type="button"
+                        onClick={() => onSelect(list.id)}
+                        className={`touch-none rounded-full px-3.5 py-2 text-sm font-medium ${
+                          activeListId === list.id
+                            ? "bg-blue-600 text-white"
+                            : "bg-white text-slate-600"
+                        }`}
+                        {...slot.dragHandleProps}
+                      >
+                        {list.name}
+                      </button>
+                    )}
+                  </SortableTab>
+                ))}
+              </SortableContext>
+            </DndContext>
+
+            {addingInSection === section.key ? (
+              <form
+                onSubmit={(e) => void handleAdd(e, section.ownerId)}
+                className="flex items-center gap-1"
+              >
+                <input
+                  type="text"
+                  autoFocus
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder={t("tasks.newListPlaceholder")}
+                  className="w-32 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={!newName.trim()}
+                  className="rounded-md bg-blue-600 px-2 py-1 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  {t("common.add")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddingInSection(null);
+                    setNewName("");
+                  }}
+                  className="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
+                >
+                  {t("common.cancel")}
+                </button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingInSection(section.key);
+                  setNewName("");
+                }}
+                className="rounded-full border border-dashed border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50"
+              >
+                + {t("tasks.addList")}
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
 
       {activeList && isRenaming && (
         <form onSubmit={(e) => void handleRename(e)} className="flex items-center gap-1">
@@ -742,7 +830,13 @@ export function TasksPage() {
         )}
       </div>
 
-      <TaskListTabs taskLists={taskLists} activeListId={activeListId} onSelect={setActiveListId} />
+      <TaskListTabs
+        taskLists={taskLists}
+        activeListId={activeListId}
+        onSelect={setActiveListId}
+        currentUserId={user?.id}
+        partner={partner}
+      />
 
       {!isAddingTask ? (
         <button
@@ -756,6 +850,7 @@ export function TasksPage() {
         <TaskForm
           members={members}
           listId={activeListId === "all" ? null : activeListId}
+          currentUserId={user?.id}
           isSubmitting={createTask.isPending}
           onSubmit={async (input) => {
             await createTask.mutateAsync(input);

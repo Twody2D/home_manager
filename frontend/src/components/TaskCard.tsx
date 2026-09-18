@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import type { Task, User } from "../api/types";
 import { formatMoney } from "../lib/money";
+import { TASK_PATH_SEPARATOR } from "../lib/taskPath";
 
 const PRIORITY_STYLES: Record<Task["priority"], string> = {
   low: "bg-slate-100 text-slate-600",
@@ -28,10 +29,10 @@ interface TaskCardProps {
   task: Task;
   assignee?: User;
   budgetOwner?: User;
-  // Shown as a small side label when this card is rendered in a flat list
-  // that mixes subtasks in with root tasks (e.g. the dashboard's "no due
-  // date" bucket), so it's clear which task a subtask belongs to.
-  parentTitle?: string;
+  // Folder + ancestor chain, shown above the title when this card sits in a
+  // flat list that mixes subtasks in with root tasks (e.g. the dashboard),
+  // so it's clear where in the tree the task actually lives.
+  path?: string[];
   // Present only when this task has subtasks — renders a chevron that
   // expands/collapses them, so a long subtask list can be tucked away.
   subtaskToggle?: { expanded: boolean; onToggle: () => void };
@@ -55,7 +56,7 @@ export function TaskCard({
   task,
   assignee,
   budgetOwner,
-  parentTitle,
+  path,
   subtaskToggle,
   onToggleComplete,
   onDelete,
@@ -122,6 +123,9 @@ export function TaskCard({
       )}
 
       <Link to={`/tasks/${task.id}`} className="min-w-0 flex-1 py-0.5" draggable={false}>
+        {path && path.length > 0 && (
+          <p className="truncate text-xs text-slate-400">{path.join(TASK_PATH_SEPARATOR)}</p>
+        )}
         <p
           className={`truncate text-sm font-medium ${
             isCompleted ? "text-slate-400 line-through" : "text-slate-900"
@@ -129,17 +133,8 @@ export function TaskCard({
         >
           {task.title}
         </p>
-        {(task.priority !== "medium" ||
-          task.due_at ||
-          assignee ||
-          task.budget_amount ||
-          parentTitle) && (
+        {(task.priority !== "medium" || task.due_at || assignee || task.budget_amount) && (
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-            {parentTitle && (
-              <span className="truncate rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
-                {t("tasks.subtaskOf", { title: parentTitle })}
-              </span>
-            )}
             {task.priority !== "medium" && (
               <span className={`rounded-full px-2 py-0.5 font-medium ${PRIORITY_STYLES[task.priority]}`}>
                 {t(`taskPriority.${task.priority}`)}

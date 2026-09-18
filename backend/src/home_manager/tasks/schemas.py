@@ -94,10 +94,18 @@ class TaskPageResponse(BaseModel):
 
 class TaskListCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+    # Which member's section the folder is filed under — null (the default)
+    # means the household's shared section. Every member sees every folder
+    # either way; this only decides where it's grouped in the UI.
+    owner_user_id: uuid.UUID | None = None
 
 
 class TaskListUpdate(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
+    # Both optional so renaming and re-filing are independent — an unset
+    # field is left alone, while an explicit null owner_user_id moves the
+    # folder to the shared section.
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    owner_user_id: uuid.UUID | None = None
 
 
 class TaskListResponse(BaseModel):
@@ -106,6 +114,7 @@ class TaskListResponse(BaseModel):
     id: uuid.UUID
     tenant_id: uuid.UUID
     created_by: uuid.UUID | None
+    owner_user_id: uuid.UUID | None
     name: str
     order_index: int
     created_at: datetime

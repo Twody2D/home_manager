@@ -5,6 +5,7 @@ import type {
   TaskList,
   TaskListCreateInput,
   TaskListsResponse,
+  TaskListUpdateInput,
   TaskPageResponse,
   TaskStatus,
   TaskUpdateInput,
@@ -61,7 +62,7 @@ export function createTaskList(input: TaskListCreateInput): Promise<TaskList> {
   return apiFetch("/task-lists", { method: "POST", body: input });
 }
 
-export function renameTaskList(id: string, input: TaskListCreateInput): Promise<TaskList> {
+export function updateTaskList(id: string, input: TaskListUpdateInput): Promise<TaskList> {
   return apiFetch(`/task-lists/${id}`, { method: "PATCH", body: input });
 }
 

@@ -80,6 +80,9 @@ export interface TaskList {
   id: string;
   tenant_id: string;
   created_by: string | null;
+  // Which member's section the folder is filed under; null = shared. Every
+  // member still sees every folder regardless.
+  owner_user_id: string | null;
   name: string;
   order_index: number;
   created_at: string;
@@ -92,7 +95,10 @@ export interface TaskListsResponse {
 
 export interface TaskListCreateInput {
   name: string;
+  owner_user_id?: string | null;
 }
+
+export type TaskListUpdateInput = Partial<TaskListCreateInput>;
 
 export type TaskUpdateInput = Partial<TaskCreateInput> & { status?: TaskStatus };
 
