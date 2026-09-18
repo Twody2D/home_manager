@@ -56,8 +56,6 @@ export const en = {
   },
   tasks: {
     title: "Tasks",
-    assigneeAll: "Everyone",
-    assigneeMine: "Mine",
     loading: "Loading tasks…",
     error: "Failed to load tasks.",
     empty: "No tasks here yet.",
@@ -82,9 +80,9 @@ export const en = {
     listMenu: "List menu",
     moveToSection: 'Move to "{{section}}"',
     sections: {
-      shared: "Shared folders",
-      mine: "My folders",
-      partner: "{{name}}'s folders",
+      all: "All",
+      shared: "Shared",
+      mine: "Mine",
     },
     completedCount: "Completed ({{count}})",
     confirmDelete: 'Delete "{{title}}"?',

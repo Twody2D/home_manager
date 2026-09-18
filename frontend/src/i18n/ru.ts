@@ -58,8 +58,6 @@ export const ru: typeof en = {
   },
   tasks: {
     title: "Задачи",
-    assigneeAll: "Общие",
-    assigneeMine: "Мои",
     loading: "Загружаем задачи…",
     error: "Не удалось загрузить задачи.",
     empty: "Здесь пока нет задач.",
@@ -84,9 +82,9 @@ export const ru: typeof en = {
     listMenu: "Меню папки",
     moveToSection: "Перенести в «{{section}}»",
     sections: {
-      shared: "Общие папки",
-      mine: "Мои папки",
-      partner: "Папки: {{name}}",
+      all: "Все",
+      shared: "Общие",
+      mine: "Мои",
     },
     completedCount: "Выполнено ({{count}})",
     confirmDelete: "Удалить «{{title}}»?",
