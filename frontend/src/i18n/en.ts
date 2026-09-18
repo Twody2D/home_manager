@@ -6,6 +6,7 @@ export const en = {
     cancel: "Cancel",
     delete: "Delete",
     somethingWentWrong: "Something went wrong",
+    retry: "Retry",
   },
   nav: {
     today: "Today",
@@ -103,6 +104,7 @@ export const en = {
       duplicateFailed: "Couldn't duplicate the task. Please try again.",
       delete: "Delete task",
       notFound: "Task not found.",
+      loadFailed: "Couldn't load the task. Check your connection and try again.",
       loading: "Loading task…",
     },
   },

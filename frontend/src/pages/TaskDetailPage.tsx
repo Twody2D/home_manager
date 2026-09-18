@@ -12,6 +12,7 @@ import {
 } from "@dnd-kit/core";
 import type { DragEndEvent, DragMoveEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { ApiError } from "../api/client";
 import { GripIcon } from "../components/TaskCard";
 import { SortableListItem } from "../components/SortableListItem";
 import {
@@ -384,16 +385,38 @@ export function TaskDetailPage() {
     return <p className="text-sm text-slate-500">{t("tasks.detail.loading")}</p>;
   }
   if (taskQuery.isError || !task) {
+    // A genuine 404 (task really doesn't exist — deleted, wrong link) is
+    // the only case where "not found" is actually true. Any other failure
+    // (a dropped connection, a timeout, a server hiccup) previously showed
+    // the exact same "not found" text, which reads as "this task is gone"
+    // when the task is very likely still there — misleading right when a
+    // long-running action like duplicating a large subtree is most likely
+    // to hit a transient network blip mid-flight. Only offer the retry
+    // button for the latter case; a real 404 has nothing to retry.
+    const isNotFound = taskQuery.error instanceof ApiError && taskQuery.error.status === 404;
     return (
       <div className="space-y-3">
-        <p className="text-sm text-red-600">{t("tasks.detail.notFound")}</p>
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="text-sm font-medium text-blue-600 hover:underline"
-        >
-          ← {t("tasks.detail.back")}
-        </button>
+        <p className="text-sm text-red-600">
+          {isNotFound ? t("tasks.detail.notFound") : t("tasks.detail.loadFailed")}
+        </p>
+        <div className="flex items-center gap-4">
+          {!isNotFound && (
+            <button
+              type="button"
+              onClick={() => void taskQuery.refetch()}
+              className="text-sm font-medium text-blue-600 hover:underline"
+            >
+              {t("common.retry")}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="text-sm font-medium text-blue-600 hover:underline"
+          >
+            ← {t("tasks.detail.back")}
+          </button>
+        </div>
       </div>
     );
   }

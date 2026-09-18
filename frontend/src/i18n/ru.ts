@@ -8,6 +8,7 @@ export const ru: typeof en = {
     cancel: "Отмена",
     delete: "Удалить",
     somethingWentWrong: "Что-то пошло не так",
+    retry: "Повторить",
   },
   nav: {
     today: "Сегодня",
@@ -105,6 +106,7 @@ export const ru: typeof en = {
       duplicateFailed: "Не удалось дублировать задачу. Попробуйте ещё раз.",
       delete: "Удалить задачу",
       notFound: "Задача не найдена.",
+      loadFailed: "Не удалось загрузить задачу. Проверьте соединение и попробуйте ещё раз.",
       loading: "Загружаем задачу…",
     },
   },
