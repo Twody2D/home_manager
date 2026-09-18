@@ -209,6 +209,7 @@ export function TaskDetailPage() {
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const [duration, setDuration] = useState("");
   const [location, setLocation] = useState("");
   const [budgetAmount, setBudgetAmount] = useState("");
@@ -262,6 +263,15 @@ export function TaskDetailPage() {
       setLoadedId(task.id);
     }
   }, [task, loadedId]);
+
+  // Grow the description box to fit all of its text instead of scrolling
+  // inside a fixed-height box, so the full description is visible at once.
+  useEffect(() => {
+    const el = descriptionRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [description]);
 
   function save(input: TaskUpdateInput) {
     if (!task) return;
@@ -458,6 +468,7 @@ export function TaskDetailPage() {
       />
 
       <textarea
+        ref={descriptionRef}
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         onBlur={() =>
@@ -465,7 +476,7 @@ export function TaskDetailPage() {
         }
         placeholder={t("tasks.detail.descriptionPlaceholder")}
         rows={2}
-        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+        className="w-full resize-none overflow-hidden rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
       />
 
       <div className="grid grid-cols-2 gap-3">
