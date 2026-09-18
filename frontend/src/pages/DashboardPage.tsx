@@ -9,6 +9,7 @@ import { useDailyPlan } from "../hooks/usePlanning";
 import { useCalendarEvents, useDeleteEvent } from "../hooks/useCalendar";
 import { useAuth } from "../auth/useAuth";
 import { buildTaskPath } from "../lib/taskPath";
+import { childrenByParent, countDescendants } from "../lib/taskTree";
 import type { Task, TaskList } from "../api/types";
 
 function todayRange(): { start: Date; end: Date } {
@@ -125,6 +126,11 @@ export function DashboardPage() {
   }
 
   function handleDelete(task: Task) {
+    // Same warning as on the tasks page — a task's subtasks go with it.
+    const count = countDescendants(task.id, childrenByParent(allTasks));
+    if (count > 0 && !window.confirm(t("tasks.confirmDeleteTree", { title: task.title, count }))) {
+      return;
+    }
     deleteTask.mutate(task.id);
   }
 

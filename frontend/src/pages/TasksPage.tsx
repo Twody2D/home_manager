@@ -38,6 +38,7 @@ import {
 } from "../hooks/useTasks";
 import { useMembers } from "../hooks/useMembers";
 import { useAuth } from "../auth/useAuth";
+import { countDescendants } from "../lib/taskTree";
 import type { Task, TaskList, TaskTemplate, User } from "../api/types";
 
 // "all" = every list combined (drag-and-drop is only enabled here when the
@@ -701,6 +702,16 @@ export function TasksPage() {
     });
   }
 
+  // Deleting a task takes its whole subtree with it, so anything with
+  // subtasks asks first and says how many go along.
+  function handleDelete(task: Task) {
+    const count = countDescendants(task.id, subtasksByParent);
+    if (count > 0 && !window.confirm(t("tasks.confirmDeleteTree", { title: task.title, count }))) {
+      return;
+    }
+    deleteTask.mutate(task.id);
+  }
+
   const allTasks = tasksQuery.data?.items ?? [];
   const byId = new Map(allTasks.map((task) => [task.id, task]));
 
@@ -1005,7 +1016,7 @@ export function TasksPage() {
                               folderOwnerId={folderOwnerById.get(task.list_id)}
                               isUpdating={updateTask.isPending}
                               onToggleComplete={handleToggleComplete}
-                              onDelete={(t) => deleteTask.mutate(t.id)}
+                              onDelete={handleDelete}
                               nestTargetId={nestTargetId}
                             />
                           ))}
@@ -1038,7 +1049,7 @@ export function TasksPage() {
                           folderOwnerId={folderOwnerById.get(task.list_id)}
                           isUpdating={updateTask.isPending}
                           onToggleComplete={handleToggleComplete}
-                          onDelete={(t) => deleteTask.mutate(t.id)}
+                          onDelete={handleDelete}
                         />
                       ))}
                     </ul>

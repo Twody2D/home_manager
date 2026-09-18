@@ -464,7 +464,12 @@ export function TaskTemplatesPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => deleteTemplate.mutate(template.id)}
+                  onClick={() => {
+                    if (!window.confirm(t("templates.confirmDelete", { name: template.name }))) {
+                      return;
+                    }
+                    deleteTemplate.mutate(template.id);
+                  }}
                   className="rounded-md px-2 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
                 >
                   {t("common.delete")}

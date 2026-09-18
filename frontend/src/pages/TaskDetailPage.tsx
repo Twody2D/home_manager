@@ -27,6 +27,7 @@ import {
 import { useMembers } from "../hooks/useMembers";
 import { useAuth } from "../auth/useAuth";
 import { buildTaskPathSegments, TASK_PATH_SEPARATOR } from "../lib/taskPath";
+import { countDescendants } from "../lib/taskTree";
 import type { Task, TaskPriority, TaskUpdateInput } from "../api/types";
 
 function listLink(listId: string | null | undefined): string {
@@ -399,9 +400,29 @@ export function TaskDetailPage() {
 
   async function handleDelete() {
     if (!task) return;
-    if (!window.confirm(t("tasks.confirmDelete", { title: task.title }))) return;
+    const count = countDescendants(task.id, grandchildrenByParent);
+    const message =
+      count > 0
+        ? t("tasks.confirmDeleteTree", { title: task.title, count })
+        : t("tasks.confirmDelete", { title: task.title });
+    if (!window.confirm(message)) return;
     await deleteTask.mutateAsync(task.id);
     navigate("/tasks");
+  }
+
+  // Subtask rows delete straight from this page, so they warn about their
+  // own children the same way.
+  function handleDeleteSubtask(subtaskId: string) {
+    const subtask = byId.get(subtaskId);
+    if (!subtask) return;
+    const count = countDescendants(subtaskId, grandchildrenByParent);
+    if (
+      count > 0 &&
+      !window.confirm(t("tasks.confirmDeleteTree", { title: subtask.title, count }))
+    ) {
+      return;
+    }
+    deleteTask.mutate(subtaskId);
   }
 
   if (taskQuery.isLoading) {
@@ -699,7 +720,7 @@ export function TaskDetailPage() {
                               <button
                                 type="button"
                                 aria-label={t("taskCard.deleteTask")}
-                                onClick={() => deleteTask.mutate(subtask.id)}
+                                onClick={() => handleDeleteSubtask(subtask.id)}
                                 className="shrink-0 rounded-md p-2.5 text-slate-400 hover:bg-slate-100 hover:text-red-600"
                               >
                                 <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
@@ -725,7 +746,7 @@ export function TaskDetailPage() {
                                         },
                                       })
                                     }
-                                    onDelete={(id) => deleteTask.mutate(id)}
+                                    onDelete={handleDeleteSubtask}
                                     t={t}
                                   />
                                 ))}

@@ -79,6 +79,7 @@ export const ru: typeof en = {
     applyTitlePlaceholder: "Например, Brazil",
     create: "Создать",
     applying: "Создаём…",
+    confirmDelete: "Удалить шаблон «{{name}}»? Уже созданные по нему задачи останутся.",
   },
   tasks: {
     title: "Задачи",
@@ -112,6 +113,7 @@ export const ru: typeof en = {
     },
     completedCount: "Выполнено ({{count}})",
     confirmDelete: "Удалить «{{title}}»?",
+    confirmDeleteTree: "Удалить «{{title}}» вместе с подзадачами? Их {{count}}.",
     detail: {
       back: "Назад",
       titlePlaceholder: "Название задачи",

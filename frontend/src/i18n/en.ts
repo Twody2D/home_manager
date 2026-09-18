@@ -77,6 +77,7 @@ export const en = {
     applyTitlePlaceholder: "e.g. Brazil",
     create: "Create",
     applying: "Creating…",
+    confirmDelete: 'Delete the template "{{name}}"? Tasks already created from it stay.',
   },
   tasks: {
     title: "Tasks",
@@ -110,6 +111,7 @@ export const en = {
     },
     completedCount: "Completed ({{count}})",
     confirmDelete: 'Delete "{{title}}"?',
+    confirmDeleteTree: 'Delete "{{title}}" and its {{count}} subtask(s)?',
     detail: {
       back: "Back",
       titlePlaceholder: "Task title",
