@@ -121,7 +121,7 @@ async def _ensure_list_owner_in_tenant(
         raise InvalidTaskListOwnerError()
 
 
-async def _ensure_list_in_tenant(
+async def ensure_list_in_tenant(
     session: AsyncSession, *, tenant_id: uuid.UUID, list_id: uuid.UUID | None
 ) -> None:
     if list_id is None:
@@ -206,7 +206,7 @@ async def _resolve_parent_task(
     return parent
 
 
-async def _next_order_index(
+async def next_order_index(
     session: AsyncSession,
     *,
     tenant_id: uuid.UUID,
@@ -236,9 +236,9 @@ async def create_task(
     if parent is not None:
         list_id = parent.list_id
     else:
-        await _ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=payload.list_id)
+        await ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=payload.list_id)
         list_id = payload.list_id
-    order_index = await _next_order_index(
+    order_index = await next_order_index(
         session, tenant_id=tenant_id, list_id=list_id, parent_task_id=payload.parent_task_id
     )
 
@@ -340,7 +340,7 @@ async def update_task(
             # had been left unset.
             del updates["list_id"]
         else:
-            await _ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=updates["list_id"])
+            await ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=updates["list_id"])
 
     target_list_id = updates.get("list_id", task.list_id)
     target_parent_id = updates.get("parent_task_id", task.parent_task_id)
@@ -348,7 +348,7 @@ async def update_task(
         # Moved to a different sibling group (list and/or parent changed) —
         # append at the end of the new group rather than keeping a position
         # number that was only meaningful in the old one.
-        updates["order_index"] = await _next_order_index(
+        updates["order_index"] = await next_order_index(
             session, tenant_id=tenant_id, list_id=target_list_id, parent_task_id=target_parent_id
         )
 
@@ -486,7 +486,7 @@ async def create_task_template(
     created_by: uuid.UUID,
     payload: TaskTemplateCreate,
 ) -> TaskTemplate:
-    await _ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=payload.list_id)
+    await ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=payload.list_id)
     template = TaskTemplate(
         tenant_id=tenant_id,
         created_by=created_by,
@@ -532,7 +532,7 @@ async def update_task_template(
     payload: TaskTemplateUpdate,
 ) -> TaskTemplate:
     template = await get_task_template(session, tenant_id=tenant_id, template_id=template_id)
-    await _ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=payload.list_id)
+    await ensure_list_in_tenant(session, tenant_id=tenant_id, list_id=payload.list_id)
     template.name = payload.name
     template.list_id = payload.list_id
     template.description = payload.description
@@ -566,7 +566,7 @@ async def apply_task_template(
     all lands or none of it does.
     """
     template = await get_task_template(session, tenant_id=tenant_id, template_id=template_id)
-    order_index = await _next_order_index(
+    order_index = await next_order_index(
         session, tenant_id=tenant_id, list_id=template.list_id, parent_task_id=None
     )
     root = Task(

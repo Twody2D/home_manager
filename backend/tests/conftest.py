@@ -19,7 +19,7 @@ async def _clean_database() -> AsyncIterator[None]:
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE TABLE tasks, task_lists, calendar_events, finance_incomes, "
+                "TRUNCATE TABLE tasks, task_lists, notes, calendar_events, finance_incomes, "
                 "finance_subscriptions, "
                 "user_preferences, push_subscriptions, "
                 "alice_links, refresh_tokens, users, tenants RESTART IDENTITY CASCADE"

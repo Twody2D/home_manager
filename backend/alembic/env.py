@@ -20,6 +20,9 @@ from home_manager.finance import (
 from home_manager.integrations.alice import (
     models as alice_models,  # noqa: F401  (registers tables on Base.metadata)
 )
+from home_manager.notes import (
+    models as notes_models,  # noqa: F401  (registers tables on Base.metadata)
+)
 from home_manager.notifications import (
     models as notifications_models,  # noqa: F401  (registers tables on Base.metadata)
 )

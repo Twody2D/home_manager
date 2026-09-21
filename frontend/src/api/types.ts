@@ -332,3 +332,36 @@ export interface SmartHomeDevice {
   state: string;
   is_on: boolean;
 }
+
+export interface NoteItem {
+  text: string;
+  children: NoteItem[];
+}
+
+export interface Note {
+  id: string;
+  tenant_id: string;
+  created_by: string | null;
+  title: string;
+  items: NoteItem[];
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NotesResponse {
+  items: Note[];
+}
+
+export interface NoteInput {
+  title: string;
+  items: NoteItem[];
+}
+
+export interface NoteConvertInput {
+  // Chain of child indexes identifying the bullet; empty converts the whole
+  // note, using its title for the task.
+  path: number[];
+  list_id?: string | null;
+  remove?: boolean;
+}

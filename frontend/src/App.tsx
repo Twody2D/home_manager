@@ -10,6 +10,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { TasksPage } from "./pages/TasksPage";
 import { TaskDetailPage } from "./pages/TaskDetailPage";
 import { TaskTemplatesPage } from "./pages/TaskTemplatesPage";
+import { NotesPage } from "./pages/NotesPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { FinancePage } from "./pages/FinancePage";
 import { PreferencesPage } from "./pages/PreferencesPage";
@@ -37,6 +38,7 @@ export default function App() {
                 <Route path="/tasks" element={<TasksPage />} />
                 <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
                 <Route path="/templates" element={<TaskTemplatesPage />} />
+                <Route path="/notes" element={<NotesPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/finance" element={<FinancePage />} />
                 <Route path="/preferences" element={<PreferencesPage />} />

@@ -6,6 +6,7 @@ from home_manager.auth.router import router as auth_router
 from home_manager.calendar.router import router as calendar_router
 from home_manager.finance.router import router as finance_router
 from home_manager.integrations.alice.router import router as alice_router
+from home_manager.notes.router import router as notes_router
 from home_manager.notifications.router import router as notifications_router
 from home_manager.planning.router import router as planning_router
 from home_manager.preferences.router import router as preferences_router
@@ -21,6 +22,7 @@ api_router.include_router(users_router)
 api_router.include_router(tasks_router)
 api_router.include_router(task_lists_router)
 api_router.include_router(task_templates_router)
+api_router.include_router(notes_router)
 api_router.include_router(calendar_router)
 api_router.include_router(finance_router)
 api_router.include_router(preferences_router)
