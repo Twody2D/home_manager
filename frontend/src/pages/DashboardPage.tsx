@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { TaskCard } from "../components/TaskCard";
 import { CalendarEventCard } from "../components/CalendarEventCard";
+import { DayCalendarTabs } from "../components/DayCalendarTabs";
 import { useMembers } from "../hooks/useMembers";
 import { useDeleteTask, useTaskLists, useTasks, useUpdateTask } from "../hooks/useTasks";
 import { useDailyPlan } from "../hooks/usePlanning";
@@ -172,6 +173,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <DayCalendarTabs />
       <div>
         <h1 className="text-lg font-semibold text-slate-900">
           {t("dashboard.title", { date: dateLabel })}

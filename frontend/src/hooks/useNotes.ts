@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as notesApi from "../api/notes";
-import type { NoteConvertInput, NoteInput } from "../api/types";
+import type { NoteConvertInput, NoteFolderInput, NoteInput } from "../api/types";
 
 const NOTES_KEY = ["notes"] as const;
+const NOTE_FOLDERS_KEY = ["note-folders"] as const;
 const TASKS_KEY = ["tasks"] as const;
 
 export function useNotes() {
@@ -43,6 +44,41 @@ export function useConvertNoteItem() {
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: TASKS_KEY }),
+        queryClient.invalidateQueries({ queryKey: NOTES_KEY }),
+      ]),
+  });
+}
+
+export function useNoteFolders() {
+  return useQuery({ queryKey: NOTE_FOLDERS_KEY, queryFn: () => notesApi.listNoteFolders() });
+}
+
+export function useCreateNoteFolder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: NoteFolderInput) => notesApi.createNoteFolder(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: NOTE_FOLDERS_KEY }),
+  });
+}
+
+export function useUpdateNoteFolder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: NoteFolderInput }) =>
+      notesApi.updateNoteFolder(id, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: NOTE_FOLDERS_KEY }),
+  });
+}
+
+export function useDeleteNoteFolder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => notesApi.deleteNoteFolder(id),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: NOTE_FOLDERS_KEY }),
+        // Its notes move out of the folder server-side rather than being
+        // deleted, so the note list needs refreshing too.
         queryClient.invalidateQueries({ queryKey: NOTES_KEY }),
       ]),
   });

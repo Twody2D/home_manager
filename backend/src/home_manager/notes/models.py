@@ -10,6 +10,33 @@ from home_manager.db.base import Base
 from home_manager.db.types import utcnow
 
 
+class NoteFolder(Base):
+    """A folder idea lists are grouped into. Deliberately separate from task
+    folders: ideas get sorted by where they come from ("Видео", "Тексты"),
+    which rarely matches how the work is filed once it becomes a task."""
+
+    __tablename__ = "note_folders"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=utcnow, nullable=False
+    )
+
+
 class Note(Base):
     """A free-form idea list — a title plus a nested bullet tree, kept apart
     from tasks so half-formed thoughts don't turn into things the planner
@@ -31,6 +58,12 @@ class Note(Base):
     )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # null means the note sits outside any folder, same convention as a
+    # task's list_id. Deleting a folder leaves its notes there rather than
+    # taking them along.
+    folder_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("note_folders.id", ondelete="SET NULL"), nullable=True
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     # List of nested item dicts — see NoteItem in schemas.py for the shape.

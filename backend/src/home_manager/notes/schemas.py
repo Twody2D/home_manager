@@ -30,6 +30,7 @@ def _validate_tree(items: list[NoteItem], depth: int = 1) -> int:
 
 class NoteBase(BaseModel):
     title: str = Field(min_length=1, max_length=200)
+    folder_id: uuid.UUID | None = None
     items: list[NoteItem] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -53,6 +54,7 @@ class NoteResponse(BaseModel):
     id: uuid.UUID
     tenant_id: uuid.UUID
     created_by: uuid.UUID | None
+    folder_id: uuid.UUID | None
     title: str
     items: list[NoteItem]
     order_index: int
@@ -78,4 +80,32 @@ class NoteConvertRequest(BaseModel):
 
 
 class NoteReorderRequest(BaseModel):
+    ordered_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+
+
+class NoteFolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+class NoteFolderUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+class NoteFolderResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    created_by: uuid.UUID | None
+    name: str
+    order_index: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class NoteFoldersResponse(BaseModel):
+    items: list[NoteFolderResponse]
+
+
+class NoteFolderReorderRequest(BaseModel):
     ordered_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)

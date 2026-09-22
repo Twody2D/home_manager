@@ -338,10 +338,29 @@ export interface NoteItem {
   children: NoteItem[];
 }
 
+export interface NoteFolder {
+  id: string;
+  tenant_id: string;
+  created_by: string | null;
+  name: string;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NoteFoldersResponse {
+  items: NoteFolder[];
+}
+
+export interface NoteFolderInput {
+  name: string;
+}
+
 export interface Note {
   id: string;
   tenant_id: string;
   created_by: string | null;
+  folder_id: string | null;
   title: string;
   items: NoteItem[];
   order_index: number;
@@ -355,6 +374,7 @@ export interface NotesResponse {
 
 export interface NoteInput {
   title: string;
+  folder_id: string | null;
   items: NoteItem[];
 }
 

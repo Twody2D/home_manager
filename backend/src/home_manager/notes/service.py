@@ -6,10 +6,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from home_manager.core.errors import AppError
-from home_manager.notes.models import Note
+from home_manager.notes.models import Note, NoteFolder
 from home_manager.notes.schemas import (
     NoteConvertRequest,
     NoteCreate,
+    NoteFolderCreate,
+    NoteFolderReorderRequest,
+    NoteFolderUpdate,
     NoteReorderRequest,
     NoteUpdate,
 )
@@ -29,15 +32,38 @@ class InvalidNoteItemPathError(AppError):
     message = "path does not point at an item in this note"
 
 
+class NoteFolderNotFoundError(AppError):
+    code = "NOTE_FOLDER_NOT_FOUND"
+    status_code = status.HTTP_404_NOT_FOUND
+    message = "Note folder not found"
+
+
+class InvalidNoteFolderError(AppError):
+    code = "INVALID_NOTE_FOLDER"
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    message = "folder_id must reference a folder in the same household"
+
+
 class InvalidNoteReorderError(AppError):
     code = "INVALID_NOTE_REORDER"
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     message = "ordered_ids must exactly match the household's current notes"
 
 
+async def _ensure_folder_in_tenant(
+    session: AsyncSession, *, tenant_id: uuid.UUID, folder_id: uuid.UUID | None
+) -> None:
+    if folder_id is None:
+        return
+    folder = await session.get(NoteFolder, folder_id)
+    if folder is None or folder.tenant_id != tenant_id:
+        raise InvalidNoteFolderError()
+
+
 async def create_note(
     session: AsyncSession, *, tenant_id: uuid.UUID, created_by: uuid.UUID, payload: NoteCreate
 ) -> Note:
+    await _ensure_folder_in_tenant(session, tenant_id=tenant_id, folder_id=payload.folder_id)
     order_index = (
         await session.scalar(
             select(func.coalesce(func.max(Note.order_index), -1) + 1).where(
@@ -49,6 +75,7 @@ async def create_note(
     note = Note(
         tenant_id=tenant_id,
         created_by=created_by,
+        folder_id=payload.folder_id,
         title=payload.title,
         items=[item.model_dump(mode="json") for item in payload.items],
         order_index=order_index,
@@ -78,6 +105,8 @@ async def update_note(
     session: AsyncSession, *, tenant_id: uuid.UUID, note_id: uuid.UUID, payload: NoteUpdate
 ) -> Note:
     note = await get_note(session, tenant_id=tenant_id, note_id=note_id)
+    await _ensure_folder_in_tenant(session, tenant_id=tenant_id, folder_id=payload.folder_id)
+    note.folder_id = payload.folder_id
     note.title = payload.title
     note.items = [item.model_dump(mode="json") for item in payload.items]
     await session.flush()
@@ -197,3 +226,77 @@ async def convert_note_item(
         await session.flush()
 
     return root
+
+
+async def create_note_folder(
+    session: AsyncSession, *, tenant_id: uuid.UUID, created_by: uuid.UUID, payload: NoteFolderCreate
+) -> NoteFolder:
+    order_index = (
+        await session.scalar(
+            select(func.coalesce(func.max(NoteFolder.order_index), -1) + 1).where(
+                NoteFolder.tenant_id == tenant_id
+            )
+        )
+        or 0
+    )
+    folder = NoteFolder(
+        tenant_id=tenant_id, created_by=created_by, name=payload.name, order_index=order_index
+    )
+    session.add(folder)
+    await session.flush()
+    return folder
+
+
+async def list_note_folders(session: AsyncSession, *, tenant_id: uuid.UUID) -> list[NoteFolder]:
+    query = (
+        select(NoteFolder)
+        .where(NoteFolder.tenant_id == tenant_id)
+        .order_by(NoteFolder.order_index.asc(), NoteFolder.created_at.asc())
+    )
+    return list((await session.scalars(query)).all())
+
+
+async def get_note_folder(
+    session: AsyncSession, *, tenant_id: uuid.UUID, folder_id: uuid.UUID
+) -> NoteFolder:
+    folder = await session.get(NoteFolder, folder_id)
+    if folder is None or folder.tenant_id != tenant_id:
+        raise NoteFolderNotFoundError()
+    return folder
+
+
+async def update_note_folder(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    folder_id: uuid.UUID,
+    payload: NoteFolderUpdate,
+) -> NoteFolder:
+    folder = await get_note_folder(session, tenant_id=tenant_id, folder_id=folder_id)
+    folder.name = payload.name
+    await session.flush()
+    return folder
+
+
+async def delete_note_folder(
+    session: AsyncSession, *, tenant_id: uuid.UUID, folder_id: uuid.UUID
+) -> None:
+    folder = await get_note_folder(session, tenant_id=tenant_id, folder_id=folder_id)
+    # Notes in it are NOT deleted — Note.folder_id's ondelete="SET NULL"
+    # moves them out of any folder, same as task lists do.
+    await session.delete(folder)
+    await session.flush()
+
+
+async def reorder_note_folders(
+    session: AsyncSession, *, tenant_id: uuid.UUID, payload: NoteFolderReorderRequest
+) -> list[NoteFolder]:
+    query = select(NoteFolder).where(NoteFolder.tenant_id == tenant_id)
+    folders = {folder.id: folder for folder in (await session.scalars(query)).all()}
+    if set(payload.ordered_ids) != set(folders.keys()):
+        raise InvalidNoteReorderError()
+
+    for index, folder_id in enumerate(payload.ordered_ids):
+        folders[folder_id].order_index = index
+    await session.flush()
+    return [folders[folder_id] for folder_id in payload.ordered_ids]

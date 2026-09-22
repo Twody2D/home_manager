@@ -9,7 +9,9 @@ import { LanguageSwitcher } from "./LanguageSwitcher";
 // The tabs a horizontal swipe on the main content cycles through, in
 // on-screen order. Kept separate from the <nav> markup below so the swipe
 // handler doesn't have to reverse-engineer tab order from rendered DOM.
-const SWIPE_TABS = ["/", "/tasks", "/notes", "/calendar", "/finance", "/assistant", "/preferences"];
+// "/" (Today) and "/calendar" share the same bottom-nav slot, so a swipe
+// moves between neighbouring tabs, not between those two views.
+const SWIPE_TABS = ["/", "/tasks", "/notes", "/finance", "/assistant"];
 const SWIPE_DISTANCE_THRESHOLD = 60;
 // Horizontal movement must dominate vertical by this ratio, or a mostly-
 // vertical scroll gesture would misfire as a tab swipe.
@@ -98,6 +100,15 @@ export function AppShell() {
           <div className="flex items-center gap-3 text-sm text-slate-600">
             <LanguageSwitcher />
             <span>{user?.display_name}</span>
+            <NavLink
+              to="/preferences"
+              aria-label={t("nav.preferences")}
+              className={({ isActive }) =>
+                `rounded-md p-1.5 hover:bg-slate-100 ${isActive ? "text-blue-600" : "text-slate-500"}`
+              }
+            >
+              <PreferencesIcon className="h-5 w-5" />
+            </NavLink>
             <button
               type="button"
               onClick={() => void logout()}
@@ -119,13 +130,11 @@ export function AppShell() {
 
       <nav className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto flex max-w-2xl">
-          <NavTab to="/" label={t("nav.today")} icon={TodayIcon} />
+          <NavTab to="/" label={t("nav.today")} icon={TodayIcon} alsoActiveOn="/calendar" />
           <NavTab to="/tasks" label={t("nav.tasks")} icon={TasksIcon} />
           <NavTab to="/notes" label={t("nav.notes")} icon={NotesIcon} />
-          <NavTab to="/calendar" label={t("nav.calendar")} icon={CalendarIcon} />
           <NavTab to="/finance" label={t("nav.finance")} icon={FinanceIcon} />
           <NavTab to="/assistant" label={t("nav.assistant")} icon={AssistantIcon} />
-          <NavTab to="/preferences" label={t("nav.preferences")} icon={PreferencesIcon} />
         </div>
       </nav>
     </div>
@@ -134,14 +143,27 @@ export function AppShell() {
 
 type IconComponent = (props: { className?: string }) => React.ReactElement;
 
-function NavTab({ to, label, icon: Icon }: { to: string; label: string; icon: IconComponent }) {
+function NavTab({
+  to,
+  label,
+  icon: Icon,
+  alsoActiveOn,
+}: {
+  to: string;
+  label: string;
+  icon: IconComponent;
+  // A second route this tab covers — the calendar lives under the Today tab,
+  // which should stay highlighted while it's open.
+  alsoActiveOn?: string;
+}) {
+  const location = useLocation();
   return (
     <NavLink
       to={to}
       end
       className={({ isActive }) =>
         `flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2 text-center ${
-          isActive ? "text-blue-600" : "text-slate-500"
+          isActive || location.pathname === alsoActiveOn ? "text-blue-600" : "text-slate-500"
         }`
       }
     >
@@ -174,15 +196,6 @@ function NotesIcon({ className }: { className?: string }) {
       <path d="M9 12h7M9 16h5M9 8h7" strokeLinecap="round" />
       <path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" />
       <path d="M5 8h.01M5 12h.01M5 16h.01" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CalendarIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
-      <rect x="3" y="4" width="18" height="17" rx="2" />
-      <path d="M3 9h18M8 2v4M16 2v4M8 14h.01M12 14h.01M16 14h.01" strokeLinecap="round" />
     </svg>
   );
 }

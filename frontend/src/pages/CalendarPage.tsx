@@ -4,6 +4,7 @@ import { QuickAddEventForm } from "../components/QuickAddEventForm";
 import { CalendarEventCard } from "../components/CalendarEventCard";
 import { BulkScheduleForm } from "../components/BulkScheduleForm";
 import { MonthCalendarGrid } from "../components/MonthCalendarGrid";
+import { DayCalendarTabs } from "../components/DayCalendarTabs";
 import { useCalendarEvents, useCreateEventsBulk, useDeleteEvent } from "../hooks/useCalendar";
 import { useMembers } from "../hooks/useMembers";
 import { useSubscriptions } from "../hooks/useFinance";
@@ -119,6 +120,7 @@ export function CalendarPage() {
 
   return (
     <div className="space-y-4">
+      <DayCalendarTabs />
       <h1 className="text-lg font-semibold text-slate-900">{t("calendar.title")}</h1>
       <p className="text-xs text-slate-500">{t("calendar.subtitle")}</p>
 

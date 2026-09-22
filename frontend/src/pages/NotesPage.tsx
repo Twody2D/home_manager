@@ -1,16 +1,20 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   useConvertNoteItem,
   useCreateNote,
+  useCreateNoteFolder,
   useDeleteNote,
+  useDeleteNoteFolder,
+  useNoteFolders,
   useNotes,
   useUpdateNote,
+  useUpdateNoteFolder,
 } from "../hooks/useNotes";
 import { useTaskLists } from "../hooks/useTasks";
-import type { Note, NoteItem, TaskList } from "../api/types";
+import type { Note, NoteFolder, NoteItem, TaskList } from "../api/types";
 
 // A bullet plus three levels under it, matching MAX_TASK_DEPTH so any bullet
 // can always be turned into a task tree.
@@ -103,7 +107,7 @@ function BulletRow({
             type="button"
             disabled={!item.text.trim()}
             onClick={() => onConvert(path, item)}
-            className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+            className="rounded-md border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
           >
             → {t("notes.toTask")}
           </button>
@@ -200,10 +204,13 @@ function ConvertDialog({
 
 function NoteEditor({
   note,
+  folderId,
   taskLists,
   onDone,
 }: {
   note: Note | null;
+  // Folder the list is filed under — the open folder tab for a new one.
+  folderId: string | null;
   taskLists: TaskList[];
   onDone: () => void;
 }) {
@@ -233,7 +240,11 @@ function NoteEditor({
   }
 
   async function save(): Promise<Note> {
-    const input = { title: title.trim(), items: pruneEmpty(items) };
+    const input = {
+      title: title.trim(),
+      folder_id: note ? note.folder_id : folderId,
+      items: pruneEmpty(items),
+    };
     if (note) return await updateNote.mutateAsync({ id: note.id, input });
     return await createNote.mutateAsync(input);
   }
@@ -260,13 +271,20 @@ function NoteEditor({
 
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder={t("notes.titlePlaceholder")}
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium focus:border-blue-500 focus:outline-none"
-      />
+      <label className="block">
+        <span className="mb-1 block text-xs font-medium text-slate-600">
+          {t("notes.titleLabel")}
+        </span>
+        <input
+          type="text"
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={t("notes.titlePlaceholder")}
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium focus:border-blue-500 focus:outline-none"
+        />
+        {!title.trim() && <span className="mt-1 block text-xs text-slate-400">{t("notes.titleRequired")}</span>}
+      </label>
 
       {converting && (
         <ConvertDialog
@@ -335,16 +353,175 @@ function NotePreview({ items, depth = 0 }: { items: NoteItem[]; depth?: number }
   );
 }
 
+// Ideas get their own folders, separate from task folders: they're sorted by
+// where an idea comes from, which rarely matches how the work is filed once
+// it becomes a task.
+function FolderTabs({
+  folders,
+  activeFolderId,
+  onSelect,
+}: {
+  folders: NoteFolder[];
+  activeFolderId: string | null;
+  onSelect: (folderId: string | null) => void;
+}) {
+  const { t } = useTranslation();
+  const createFolder = useCreateNoteFolder();
+  const updateFolder = useUpdateNoteFolder();
+  const deleteFolder = useDeleteNoteFolder();
+
+  const [isAdding, setIsAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const activeFolder = folders.find((folder) => folder.id === activeFolderId);
+
+  async function handleAdd(event: FormEvent) {
+    event.preventDefault();
+    if (!newName.trim()) return;
+    const folder = await createFolder.mutateAsync({ name: newName.trim() });
+    setNewName("");
+    setIsAdding(false);
+    onSelect(folder.id);
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <button
+        type="button"
+        onClick={() => onSelect(null)}
+        className={`rounded-full px-3.5 py-2 text-sm font-medium ${
+          activeFolderId === null ? "bg-blue-600 text-white" : "bg-white text-slate-600"
+        }`}
+      >
+        {t("notes.allFolders")}
+      </button>
+
+      {folders.map((folder) => (
+        <button
+          key={folder.id}
+          type="button"
+          onClick={() => onSelect(folder.id)}
+          className={`rounded-full px-3.5 py-2 text-sm font-medium ${
+            activeFolderId === folder.id ? "bg-blue-600 text-white" : "bg-white text-slate-600"
+          }`}
+        >
+          {folder.name}
+        </button>
+      ))}
+
+      {isAdding ? (
+        <form onSubmit={(e) => void handleAdd(e)} className="flex items-center gap-1">
+          <input
+            type="text"
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder={t("notes.newFolderPlaceholder")}
+            className="w-32 rounded-md border border-slate-300 px-2 py-1 text-sm"
+          />
+          <button
+            type="submit"
+            disabled={!newName.trim()}
+            className="rounded-md bg-blue-600 px-2 py-1 text-sm font-medium text-white disabled:opacity-60"
+          >
+            {t("common.add")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIsAdding(false);
+              setNewName("");
+            }}
+            className="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
+          >
+            {t("common.cancel")}
+          </button>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsAdding(true)}
+          className="rounded-full border border-dashed border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50"
+        >
+          + {t("notes.addFolder")}
+        </button>
+      )}
+
+      {activeFolder && (
+        <div
+          className="relative ml-auto"
+          tabIndex={-1}
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setMenuOpen(false);
+          }}
+        >
+          <button
+            type="button"
+            aria-label={t("notes.folderMenu")}
+            onClick={() => setMenuOpen((open) => !open)}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+              <circle cx="10" cy="4" r="1.6" />
+              <circle cx="10" cy="10" r="1.6" />
+              <circle cx="10" cy="16" r="1.6" />
+            </svg>
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 z-10 mt-1 w-52 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+              <button
+                type="button"
+                onClick={() => {
+                  const name = window.prompt(t("notes.renameFolder"), activeFolder.name);
+                  setMenuOpen(false);
+                  if (name?.trim()) {
+                    updateFolder.mutate({ id: activeFolder.id, input: { name: name.trim() } });
+                  }
+                }}
+                className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              >
+                {t("notes.renameFolder")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  if (!window.confirm(t("notes.confirmDeleteFolder", { name: activeFolder.name })))
+                    return;
+                  deleteFolder.mutate(activeFolder.id);
+                  onSelect(null);
+                }}
+                className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+              >
+                {t("notes.deleteFolder")}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function NotesPage() {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeFolderId = searchParams.get("folder");
   const notesQuery = useNotes();
+  const foldersQuery = useNoteFolders();
   const taskListsQuery = useTaskLists();
   const deleteNote = useDeleteNote();
 
   const [editing, setEditing] = useState<Note | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
-  const notes = notesQuery.data?.items ?? [];
+  const folders = foldersQuery.data?.items ?? [];
+  const allNotes = notesQuery.data?.items ?? [];
+  const notes =
+    activeFolderId === null
+      ? allNotes
+      : allNotes.filter((note) => note.folder_id === activeFolderId);
   const taskLists = taskListsQuery.data?.items ?? [];
 
   return (
@@ -354,10 +531,17 @@ export function NotesPage() {
         <p className="text-xs text-slate-500">{t("notes.subtitle")}</p>
       </div>
 
+      <FolderTabs
+        folders={folders}
+        activeFolderId={activeFolderId}
+        onSelect={(folderId) => setSearchParams(folderId ? { folder: folderId } : {})}
+      />
+
       {editing || isCreating ? (
         <NoteEditor
           key={editing?.id ?? "new"}
           note={editing}
+          folderId={activeFolderId}
           taskLists={taskLists}
           onDone={() => {
             setEditing(null);

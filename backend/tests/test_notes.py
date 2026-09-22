@@ -229,3 +229,72 @@ async def test_reorder_notes(client: AsyncClient, register_household: RegisterHo
         "B",
         "A",
     ]
+
+
+@pytest.mark.asyncio
+async def test_note_folders_group_notes(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+
+    folder = await client.post("/api/v1/note-folders", json={"name": "Видео"}, headers=headers)
+    assert folder.status_code == 201, folder.text
+    folder_id = folder.json()["id"]
+
+    in_folder = await client.post(
+        "/api/v1/notes",
+        json={"title": "Идеи для видео", "folder_id": folder_id},
+        headers=headers,
+    )
+    assert in_folder.json()["folder_id"] == folder_id
+    loose = await client.post("/api/v1/notes", json={"title": "Разное"}, headers=headers)
+    assert loose.json()["folder_id"] is None
+
+    folders = await client.get("/api/v1/note-folders", headers=headers)
+    assert [item["name"] for item in folders.json()["items"]] == ["Видео"]
+
+
+@pytest.mark.asyncio
+async def test_note_folder_rename_delete_keeps_its_notes(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner = await register_household(client)
+    headers = _auth_headers(owner)
+    folder = await client.post("/api/v1/note-folders", json={"name": "Видео"}, headers=headers)
+    folder_id = folder.json()["id"]
+    await client.post(
+        "/api/v1/notes", json={"title": "Идеи", "folder_id": folder_id}, headers=headers
+    )
+
+    renamed = await client.patch(
+        f"/api/v1/note-folders/{folder_id}", json={"name": "Ролики"}, headers=headers
+    )
+    assert renamed.json()["name"] == "Ролики"
+
+    deleted = await client.delete(f"/api/v1/note-folders/{folder_id}", headers=headers)
+    assert deleted.status_code == 204
+
+    notes = (await client.get("/api/v1/notes", headers=headers)).json()["items"]
+    assert [note["title"] for note in notes] == ["Идеи"]
+    assert notes[0]["folder_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_note_folder_must_belong_to_the_same_household(
+    client: AsyncClient, register_household: RegisterHousehold
+) -> None:
+    owner_a = await register_household(client, email="owner-a@example.com")
+    owner_b = await register_household(client, email="owner-b@example.com")
+    folder = await client.post(
+        "/api/v1/note-folders", json={"name": "Видео"}, headers=_auth_headers(owner_b)
+    )
+
+    response = await client.post(
+        "/api/v1/notes",
+        json={"title": "Чужая папка", "folder_id": folder.json()["id"]},
+        headers=_auth_headers(owner_a),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_NOTE_FOLDER"
